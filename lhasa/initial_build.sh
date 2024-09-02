@@ -14,9 +14,40 @@ else
 fi
 
 source ./VERSIONS
+source ./EMSCRIPTEN_CONFIG
 
-BUILD_DIR=${PWD}/build
-INSTALL_DIR=${PWD}/prefix
+if [ x"$1" = x"--64bit" ]; then
+    MEMORY64=1
+    shift
+    MODULES=$*
+elif [ x"$1" = x"--32bit" ]; then
+    MEMORY64=0
+    shift
+    MODULES=$*
+elif [ x"$1" = x"--clear" ]; then
+    shift
+    CLEAR_MODULES=$*
+else
+    MODULES=$*
+fi
+
+if test x"${MEMORY64}" = x"1"; then
+    echo "#####################################################"
+    echo "Building ** 64-bit ** (large memory) version of Lhasa"
+    echo "#####################################################"
+    echo
+    LHASA_CMAKE_FLAGS="-sMEMORY64=1 -pthread"
+    BUILD_DIR=${PWD}/build64
+    INSTALL_DIR=${PWD}/prefix64
+else
+    echo "######################################"
+    echo "Building ** 32-bit ** version of Lhasa"
+    echo "######################################"
+    echo
+    LHASA_CMAKE_FLAGS="-pthread"
+    BUILD_DIR=${PWD}/build
+    INSTALL_DIR=${PWD}/prefix
+fi
 
 echo "Sources are in ${SOURCE_DIR}"
 echo "Building in ${BUILD_DIR}"
@@ -25,32 +56,40 @@ echo "Installing in ${INSTALL_DIR}"
 mkdir -p ${INSTALL_DIR}
 mkdir -p ${BUILD_DIR}
 
-source ./EMSCRIPTEN_CONFIG
-
-if [ x"$1" = x"--64bit" ]; then
-   MEMORY64=1
-   shift
-   MODULES=$*
-elif [ x"$1" = x"--clear" ]; then
-   shift
-   CLEAR_MODULES=$*
-else
-   MODULES=$*
-fi
-
-# Only big stuff goes here
 if [ x"$CLEAR_MODULES" = x"" ]; then
     :
 else
     for mod in $CLEAR_MODULES; do
         case $mod in
-           boost) echo "Clear boost"
-               rm -rf ${BUILD_DIR}/boost
-               rm -rf ${INSTALL_DIR}/include/boost
-               ;;
-           rdkit) echo "Clear rdkit"
-               rm -rf ${BUILD_DIR}/rdkit_build
-               rm -rf ${INSTALL_DIR}/include/rdkit
+            boost) echo "Clear boost"
+                rm -rf ${BUILD_DIR}/boost
+                rm -rf ${INSTALL_DIR}/include/boost
+                ;;
+            rdkit) echo "Clear rdkit"
+                rm -rf ${BUILD_DIR}/rdkit_build
+                rm -rf ${INSTALL_DIR}/include/rdkit
+                ;;
+            gemmi) echo "Clear gemmi"
+                rm -rf ${BUILD_DIR}/gemmi_build
+                rm -rf ${INSTALL_DIR}/include/gemmi
+                rm -rf ${INSTALL_DIR}/lib/libgemmi_cpp.a
+                ;;
+            sigcpp) echo "Clear sigc++"
+                rm -rf ${BUILD_DIR}/libsigcplusplus_build
+                rm -rf ${INSTALL_DIR}/include/sigc++-3.0
+                rm -rf ${INSTALL_DIR}/lib/libsigc-3.0.a
+                rm -rf ${INSTALL_DIR}/lib/sigc++-3.0
+                rm -rf ${INSTALL_DIR}/lib/pkgconfig/sigc++-3.0.pc
+                ;;
+            graphene) echo "Clear graphene"
+                rm -rf ${BUILD_DIR}/graphene_build
+                rm -rf ${INSTALL_DIR}/include/graphene-1.0
+                rm -rf ${INSTALL_DIR}/lib/libgraphene-1.0.a
+                rm -rf ${INSTALL_DIR}/lib/graphene-1.0
+                rm -rf ${INSTALL_DIR}/lib/pkgconfig/graphene-1.0.pc
+                ;;
+            *)  echo "Unknown module requested for clearing"
+                echo "Modules are: sigcpp graphene gemmi rdkit boost"
                ;;
         esac
         done
@@ -68,24 +107,11 @@ rm -f a.out.js
 rm -f a.out.wasm
 rm -f a.out.worker.js
 
-if test x"${MEMORY64}" = x"1"; then
-    echo "#####################################################"
-    echo "Building ** 64-bit ** (large memory) version of Lhasa"
-    echo "#####################################################"
-    echo
-    LHASA_CMAKE_FLAGS="-sMEMORY64=1 -pthread"
-else
-    echo "######################################"
-    echo "Building ** 32-bit ** version of Lhasa"
-    echo "######################################"
-    echo
-    LHASA_CMAKE_FLAGS="-pthread"
-fi
-
 BUILD_BOOST=false
 BUILD_RDKIT=false
 BUILD_GRAPHENE=false
 BUILD_LIBSIGCPP=false
+BUILD_GEMMI=false
 
 
 if test -d ${INSTALL_DIR}/include/boost; then
@@ -112,7 +138,12 @@ else
     BUILD_LIBSIGCPP=true
 fi
 
-# Only big stuff goes here
+if test -d ${INSTALL_DIR}/include/gemmi; then
+    true
+else
+    BUILD_GEMMI=true
+fi
+
 for mod in $MODULES; do
     case $mod in
        boost) echo "Force build boost"
@@ -120,6 +151,15 @@ for mod in $MODULES; do
        ;;
        rdkit) echo "Force build rdkit"
        BUILD_RDKIT=true
+       ;;
+       gemmi) echo "Force build gemmi"
+       BUILD_GEMMI=true
+       ;;
+       sigcpp) echo "Force build sigc++"
+       BUILD_LIBSIGCPP=true
+       ;;
+       graphene) echo "Force build graphene"
+       BUILD_GRAPHENE=true
        ;;
     esac
 done
@@ -129,6 +169,7 @@ echo "BUILD_BOOST     " $BUILD_BOOST
 echo "BUILD_RDKIT     " $BUILD_RDKIT
 echo "BUILD_GRAPHENE  " $BUILD_GRAPHENE
 echo "BUILD_LIBSIGCPP " $BUILD_LIBSIGCPP
+echo "BUILD_GEMMI     " $BUILD_GEMMI
 
 #Boost
 #boost with cmake
@@ -247,4 +288,16 @@ if [ $BUILD_LIBSIGCPP = true ]; then
         meson install -C ${BUILD_DIR}/libsigcplusplus_build
         popd
     
+fi
+
+#gemmi
+if [ $BUILD_GEMMI = true ]; then
+    mkdir -p ${BUILD_DIR}/gemmi_build
+    cd ${BUILD_DIR}/gemmi_build
+    emcmake cmake  -DCMAKE_EXE_LINKER_FLAGS="${LHASA_CMAKE_FLAGS}" \
+        -DCMAKE_C_FLAGS="${LHASA_CMAKE_FLAGS}"\
+        -DCMAKE_CXX_FLAGS="${LHASA_CMAKE_FLAGS}" \
+        -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR}/checkout/gemmi-$gemmi_release/
+    emmake make -j ${NUMPROCS}
+    emmake make install
 fi

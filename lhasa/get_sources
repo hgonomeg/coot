@@ -20,6 +20,10 @@ echo "Downloading libsigc++ source"
 curl -L https://github.com/libsigcplusplus/libsigcplusplus/archive/refs/tags/$libsigcpp_release.tar.gz -o libsigcplusplus_$libsigcpp_release.tar.gz
 echo
 
+echo "Downloading gemmi source"
+curl -L https://github.com/project-gemmi/gemmi/archive/refs/tags/$gemmi_release.tar.gz -o gemmi_$gemmi_release.tar.gz
+echo
+
 echo "Unpacking RDKit source"
 tar xf "$rdkit_release.tar.gz"
 echo
@@ -30,6 +34,10 @@ echo
 
 echo "Unpacking graphene source"
 tar xf "graphene_$graphene_release.tar.gz"
+echo
+
+echo "Unpacking gemmi source"
+tar xf "gemmi_$gemmi_release.tar.gz"
 echo
 
 # #Get RDKit

@@ -21,7 +21,7 @@ curl -L https://github.com/libsigcplusplus/libsigcplusplus/archive/refs/tags/$li
 echo
 
 echo "Downloading gemmi source"
-curl -L https://github.com/project-gemmi/gemmi/archive/refs/tags/$gemmi_release.tar.gz -o gemmi_$gemmi_release.tar.gz
+curl -L https://github.com/project-gemmi/gemmi/archive/refs/tags/v$gemmi_release.tar.gz -o gemmi_$gemmi_release.tar.gz
 echo
 
 echo "Unpacking RDKit source"

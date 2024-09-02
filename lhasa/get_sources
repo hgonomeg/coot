@@ -40,6 +40,11 @@ echo "Unpacking gemmi source"
 tar xf "gemmi_$gemmi_release.tar.gz"
 echo
 
+echo Patching gemmi...
+cd gemmi-$gemmi_release
+patch -p1 < ../../patches/gemmi-emscripten-64.patch
+cd ..
+
 # #Get RDKit
 # echo "Downloading RDKit_minimal js/wasm"
 # echo

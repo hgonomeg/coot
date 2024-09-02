@@ -19,7 +19,6 @@
  * 02110-1301, USA
  */
 
-#include "Python.h"
 #include <gtk/gtk.h>
 #include <thread>
 #include "utils/coot-utils.hh"

@@ -9,6 +9,7 @@ AM_CPPFLAGS = \
     $(BOOST_CPPFLAGS)       \
 	$(GTK_CFLAGS)           \
 	$(GLIB_CFLAGS)          \
+	$(GEMMI_CXXFLAGS)       \
 	-DUSE_LIBCURL=1 $(CURL_CFLAGS)          
 
 # needed? test make dist
@@ -57,6 +58,7 @@ libcoot_layla_la_LIBADD = $(top_builddir)/geometry/libcoot-geometry.la \
                           $(top_builddir)/utils/libcoot-utils.la \
                           $(GTK_LIBS) $(GLIB_LIBS) \
                           $(RDKIT_LIBS) $(CURL_LIBS) \
+						  $(GEMMI_LIBS) \
                           -lpthread
 
 libcoot_layla_la_LDFLAGS = $(SHARED_LDFLAGS)

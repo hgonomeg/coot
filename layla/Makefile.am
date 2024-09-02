@@ -5,14 +5,11 @@ lib_LTLIBRARIES=libcoot-layla.la
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)         \
-	$(CLIPPER_CXXFLAGS)     \
 	$(RDKIT_CXXFLAGS)       \
-        $(BOOST_CPPFLAGS)       \
-	-DUSE_PYTHON=1 $(PYTHON_CPPFLAGS)      \
+    $(BOOST_CPPFLAGS)       \
 	$(GTK_CFLAGS)           \
 	$(GLIB_CFLAGS)          \
-	-DUSE_LIBCURL=1 $(CURL_CFLAGS)          \
-	$(MMDB_CXXFLAGS)
+	-DUSE_LIBCURL=1 $(CURL_CFLAGS)          
 
 # needed? test make dist
 #  EXTRA_DIST = layla.ui
@@ -70,8 +67,7 @@ AM_CXXFLAGS = \
 	-DPKGDATADIR='"$(pkgdatadir)"' \
 	$(SQLITE3_CFLAGS)              \
 	$(COOT_WINDOWS_CFLAGS)         \
-	$(CURL_LIBS)                   \
-        $(LIBPNG_CFLAGS)
+    $(LIBPNG_CFLAGS)
 
 # maybe libexec_PROGRAMS if/when we use a shell-script wrapper
 bin_PROGRAMS = layla

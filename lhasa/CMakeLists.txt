@@ -93,6 +93,7 @@ target_link_libraries(lhasa PRIVATE
     RDKitDataStructs
     boost_iostreams 
     boost_serialization
+    gemmi_cpp
     ${DEPS_LIBRARIES}
     lh
 )

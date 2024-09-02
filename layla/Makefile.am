@@ -30,6 +30,7 @@ pkginclude_HEADERS = \
 	qed.hpp \
 	ligand_editor_canvas/core.hpp  \
 	ligand_editor_canvas/model.hpp \
+	ligand_editor_canvas/model/coord_loader.hpp \
 	ligand_editor_canvas/tools.hpp \
 	ligand_editor_canvas/render.hpp \
 	ligand_editor_canvas.hpp \
@@ -49,6 +50,7 @@ libcoot_layla_la_SOURCES = \
 	ligand_editor_canvas/core.cpp \
 	ligand_editor_canvas.cpp \
 	ligand_editor_canvas/model.cpp \
+	ligand_editor_canvas/model/coord_loader.cpp \
 	ligand_editor_canvas/tools.cpp \
 	ligand_editor_canvas/render.cpp \
 	python_utils.cpp

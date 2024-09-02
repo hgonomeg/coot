@@ -26,6 +26,7 @@
 #include <variant>
 #include <optional>
 #include <rdkit/GraphMol/RWMol.h>
+#include "model/coord_loader.hpp"
 // Forward declaration of types defined at "render.hpp"
 namespace coot::ligand_editor_canvas::impl {
     struct Renderer;

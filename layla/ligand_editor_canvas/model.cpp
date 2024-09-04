@@ -34,6 +34,8 @@
 #include <rdkit/GraphMol/Substruct/SubstructMatch.h>
 #include <rdkit/Geometry/point.h>
 #include <rdkit/GraphMol/MolOps.h>
+#include <rdkit/GraphMol/Conformer.h>
+#include <rdkit/GraphMol/CoordGen.h>
 #include <cmath>
 #include <boost/range/iterator_range.hpp>
 #include <string>
@@ -549,8 +551,12 @@ RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry() const {
         g_info("Computing fresh 2D coords (without previous reference).");
     }
 
+    int conformer_id = -1;
+
     try {
-        RDDepict::compute2DCoords(*this->rdkit_molecule,previous_coordinate_map,true,true);
+        //this->rdkit_molecule->
+        conformer_id = RDKit::CoordGen::addCoords(*this->rdkit_molecule.get());
+        // RDDepict::compute2DCoords(*this->rdkit_molecule,previous_coordinate_map, true, false);
     } catch(std::exception& e) {
         throw std::runtime_error(std::string("Failed to compute 2D coords with RDKit! ")+e.what());
     }
@@ -564,7 +570,7 @@ RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry() const {
     // Maps atom indices to 2D points
     RDGeom::INT_POINT2D_MAP coordinate_map;
 
-    RDKit::Conformer& conf = this->rdkit_molecule->getConformer();
+    RDKit::Conformer& conf = this->rdkit_molecule->getConformer(conformer_id);
     for(auto mv: matchVect) {
         RDGeom::Point3D pt3 = conf.getAtomPos( mv.first );
         RDGeom::Point2D pt2( pt3.x , pt3.y );

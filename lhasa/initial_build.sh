@@ -224,9 +224,8 @@ if [ $BUILD_MAEPARSER = true ]; then
         ${BOOST_CMAKE_STUFF} \
         -DBoost_USE_STATIC_LIBS=ON \
         -DBoost_USE_STATIC_RUNTIME=ON \
-        -DBoost_DEBUG=TRUE \
-        -DBUILD_SHARED_LIBS=OFF \
         -DMAEPARSER_BUILD_TESTS=OFF \
+        -DMAEPARSER_BUILD_SHARED_LIBS=OFF \
         -DCMAKE_C_FLAGS="${LHASA_CMAKE_FLAGS}"\
         -DCMAKE_CXX_FLAGS="${LHASA_CMAKE_FLAGS}" \
         -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR}/checkout/maeparser-$maeparser_release/
@@ -234,7 +233,7 @@ if [ $BUILD_MAEPARSER = true ]; then
     emmake make install
 fi
 
-#Coordgen
+# Coordgen
 if [ $BUILD_COORDGEN = true ]; then
     mkdir -p ${BUILD_DIR}/coordgen_build
     cd ${BUILD_DIR}/coordgen_build
@@ -244,8 +243,14 @@ if [ $BUILD_COORDGEN = true ]; then
         ${BOOST_CMAKE_STUFF} \
         -DBoost_USE_STATIC_LIBS=ON \
         -DBoost_USE_STATIC_RUNTIME=ON \
-        -DBoost_DEBUG=TRUE \
-        -DBUILD_SHARED_LIBS=OFF \
+        -DCOORDGEN_BUILD_SHARED_LIBS=OFF \
+        -DCOORDGEN_BUILD_TESTS=OFF \
+        -DCOORDGEN_BUILD_EXAMPLE=OFF \
+        -DCOORDGEN_USE_MAEPARSER=ON \
+        -DCOORDGEN_RIGOROUS_BUILD=OFF \
+        -Dmaeparser_INCLUDE_DIRS=${INSTALL_DIR}/include \
+        -Dmaeparser_LIBRARIES=${INSTALL_DIR}/lib \
+        -Dmaeparser_DIR=${INSTALL_DIR} \
         -DCMAKE_C_FLAGS="${LHASA_CMAKE_FLAGS}"\
         -DCMAKE_CXX_FLAGS="${LHASA_CMAKE_FLAGS}" \
         -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR}/checkout/coordgenlibs-$coordgen_release/
@@ -271,6 +276,12 @@ if [ $BUILD_RDKIT = true ]; then
                   -DBoost_USE_STATIC_LIBS=ON \
                   -DBoost_USE_STATIC_RUNTIME=ON \
                   -DBoost_DEBUG=TRUE \
+                  -Dmaeparser_INCLUDE_DIRS=${INSTALL_DIR}/include \
+                  -Dmaeparser_LIBRARIES=${INSTALL_DIR}/lib \
+                  -Dmaeparser_DIR=${INSTALL_DIR} \
+                  -Dcoordgen_INCLUDE_DIRS=${INSTALL_DIR}/include \
+                  -Dcoordgen_LIBRARIES=${INSTALL_DIR}/lib \
+                  -Dcoordgen_DIR=${INSTALL_DIR} \
                   -DCMAKE_CXX_FLAGS="${LHASA_CMAKE_FLAGS} -fwasm-exceptions -Wno-enum-constexpr-conversion -D_HAS_AUTO_PTR_ETC=0" \
                   -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR}/checkout/rdkit \
                   -DRDK_OPTIMIZE_POPCNT=OFF \

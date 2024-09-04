@@ -92,6 +92,7 @@ target_link_libraries(lhasa PRIVATE
     boost_iostreams 
     boost_serialization
     gemmi_cpp
+    maeparser
     ${DEPS_LIBRARIES}
     lh
 )

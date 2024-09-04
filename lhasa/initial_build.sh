@@ -88,9 +88,15 @@ else
                 rm -rf ${INSTALL_DIR}/lib/graphene-1.0
                 rm -rf ${INSTALL_DIR}/lib/pkgconfig/graphene-1.0.pc
                 ;;
-            maeparser) echo "todo"
+            maeparser) echo "Clear maeparser"
+                rm -rf ${BUILD_DIR}/maeparser_build
+                rm -rf ${INSTALL_DIR}/include/maeparser
+                rm -rf ${INSTALL_DIR}/lib/libmaeparser.a
             ;;
-            coordgen) echo "todo"
+            coordgen) echo "Clear coordgen"
+                rm -rf ${BUILD_DIR}/coordgen_build
+                rm -rf ${INSTALL_DIR}/include/coordgen
+                rm -rf ${INSTALL_DIR}/lib/libcoordgen.a
             ;;
             *)  echo "Unknown module requested for clearing"
                 echo "Modules are: sigcpp graphene gemmi rdkit boost maeparser coordgen"

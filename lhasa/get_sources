@@ -24,6 +24,14 @@ echo "Downloading gemmi source"
 curl -L https://github.com/project-gemmi/gemmi/archive/refs/tags/v$gemmi_release.tar.gz -o gemmi_$gemmi_release.tar.gz
 echo
 
+echo "Downloading maeparser source"
+curl -L https://github.com/schrodinger/maeparser/archive/refs/tags/v$maeparser_release.tar.gz -o maeparser_$maeparser_release.tar.gz
+echo
+
+echo "Downloading coordgen source"
+curl -L https://github.com/schrodinger/coordgenlibs/archive/refs/tags/v$coordgen_release.tar.gz -o coordgen_$coordgen_release.tar.gz
+echo
+
 echo "Unpacking RDKit source"
 tar xf "$rdkit_release.tar.gz"
 echo
@@ -34,6 +42,14 @@ echo
 
 echo "Unpacking graphene source"
 tar xf "graphene_$graphene_release.tar.gz"
+echo
+
+echo "Unpacking maeparser source"
+tar xf "maeparser_$maeparser_release.tar.gz"
+echo
+
+echo "Unpacking coordgen source"
+tar xf "coordgen_$coordgen_release.tar.gz"
 echo
 
 echo "Unpacking gemmi source"

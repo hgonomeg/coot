@@ -76,7 +76,7 @@ set_target_properties(lhasa PROPERTIES LINK_FLAGS " -s ENVIRONMENT=web,worker -s
 
 target_link_libraries(lhasa PRIVATE 
     RDKitDepictor 
-    RDKitcoordgen
+    coordgen
     RDKitMolTransforms
     RDKitSmilesParse 
     RDKitMolDraw2D 

@@ -88,8 +88,12 @@ else
                 rm -rf ${INSTALL_DIR}/lib/graphene-1.0
                 rm -rf ${INSTALL_DIR}/lib/pkgconfig/graphene-1.0.pc
                 ;;
+            maeparser) echo "todo"
+            ;;
+            coordgen) echo "todo"
+            ;;
             *)  echo "Unknown module requested for clearing"
-                echo "Modules are: sigcpp graphene gemmi rdkit boost"
+                echo "Modules are: sigcpp graphene gemmi rdkit boost maeparser coordgen"
                ;;
         esac
         done
@@ -112,6 +116,8 @@ BUILD_RDKIT=false
 BUILD_GRAPHENE=false
 BUILD_LIBSIGCPP=false
 BUILD_GEMMI=false
+BUILD_MAEPARSER=false
+BUILD_COORDGEN=false
 
 
 if test -d ${INSTALL_DIR}/include/boost; then
@@ -144,6 +150,18 @@ else
     BUILD_GEMMI=true
 fi
 
+if test -d ${INSTALL_DIR}/include/coordgen; then
+    true
+else
+    BUILD_COORDGEN=true
+fi
+
+if test -d ${INSTALL_DIR}/include/maeparser; then
+    true
+else
+    BUILD_MAEPARSER=true
+fi
+
 for mod in $MODULES; do
     case $mod in
        boost) echo "Force build boost"
@@ -161,6 +179,12 @@ for mod in $MODULES; do
        graphene) echo "Force build graphene"
        BUILD_GRAPHENE=true
        ;;
+       maeparser) echo "Force build maeparser"
+       BUILD_MAEPARSER=true
+       ;;
+       coordgen) echo "Force build coordgen"
+       BUILD_COORDGEN=true
+       ;;
     esac
 done
 
@@ -170,6 +194,8 @@ echo "BUILD_RDKIT     " $BUILD_RDKIT
 echo "BUILD_GRAPHENE  " $BUILD_GRAPHENE
 echo "BUILD_LIBSIGCPP " $BUILD_LIBSIGCPP
 echo "BUILD_GEMMI     " $BUILD_GEMMI
+echo "BUILD_MAEPARSER " $BUILD_MAEPARSER
+echo "BUILD_COORDGEN  " $BUILD_COORDGEN
 
 #Boost
 #boost with cmake
@@ -179,15 +205,56 @@ if [ $BUILD_BOOST = true ]; then
     emcmake cmake -DCMAKE_C_FLAGS="${LHASA_CMAKE_FLAGS}" \
                   -DCMAKE_CXX_FLAGS="${LHASA_CMAKE_FLAGS}" \
                   -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} \
+                  -DBUILD_SHARED_LIBS=OFF \
                   ${SOURCE_DIR}/checkout/boost-$boost_release \
                   -DBOOST_EXCLUDE_LIBRARIES="context;fiber;fiber_numa;asio;log;coroutine;cobalt;nowide"
     emmake make -j ${NUMPROCS}
     emmake make install
 fi
 
+BOOST_CMAKE_STUFF=`for i in ${INSTALL_DIR}/lib/cmake/boost*; do j=${i%-$boost_release}; k=${j#${INSTALL_DIR}/lib/cmake/boost_}; echo -Dboost_${k}_DIR=$i; done`
+
+#Maeparser
+if [ $BUILD_MAEPARSER = true ]; then
+    mkdir -p ${BUILD_DIR}/maeparser_build
+    cd ${BUILD_DIR}/maeparser_build
+    emcmake cmake cmake -DCMAKE_EXE_LINKER_FLAGS="${LHASA_CMAKE_FLAGS}" \
+        -DBoost_DIR=${INSTALL_DIR}/lib/cmake/Boost-$boost_release \
+        -DBoost_INCLUDE_DIR=${INSTALL_DIR}/include \
+        ${BOOST_CMAKE_STUFF} \
+        -DBoost_USE_STATIC_LIBS=ON \
+        -DBoost_USE_STATIC_RUNTIME=ON \
+        -DBoost_DEBUG=TRUE \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DMAEPARSER_BUILD_TESTS=OFF \
+        -DCMAKE_C_FLAGS="${LHASA_CMAKE_FLAGS}"\
+        -DCMAKE_CXX_FLAGS="${LHASA_CMAKE_FLAGS}" \
+        -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR}/checkout/maeparser-$maeparser_release/
+    emmake make -j ${NUMPROCS}
+    emmake make install
+fi
+
+#Coordgen
+if [ $BUILD_COORDGEN = true ]; then
+    mkdir -p ${BUILD_DIR}/coordgen_build
+    cd ${BUILD_DIR}/coordgen_build
+    emcmake cmake cmake -DCMAKE_EXE_LINKER_FLAGS="${LHASA_CMAKE_FLAGS}" \
+        -DBoost_DIR=${INSTALL_DIR}/lib/cmake/Boost-$boost_release \
+        -DBoost_INCLUDE_DIR=${INSTALL_DIR}/include \
+        ${BOOST_CMAKE_STUFF} \
+        -DBoost_USE_STATIC_LIBS=ON \
+        -DBoost_USE_STATIC_RUNTIME=ON \
+        -DBoost_DEBUG=TRUE \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DCMAKE_C_FLAGS="${LHASA_CMAKE_FLAGS}"\
+        -DCMAKE_CXX_FLAGS="${LHASA_CMAKE_FLAGS}" \
+        -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR}/checkout/coordgenlibs-$coordgen_release/
+    emmake make -j ${NUMPROCS}
+    emmake make install
+fi
+
 #RDKit
 if [ $BUILD_RDKIT = true ]; then
-    BOOST_CMAKE_STUFF=`for i in ${INSTALL_DIR}/lib/cmake/boost*; do j=${i%-$boost_release}; k=${j#${INSTALL_DIR}/lib/cmake/boost_}; echo -Dboost_${k}_DIR=$i; done`
     mkdir -p ${BUILD_DIR}/rdkit_build
     cd ${BUILD_DIR}/rdkit_build
     emcmake cmake -DBoost_DIR=${INSTALL_DIR}/lib/cmake/Boost-$boost_release \
@@ -294,7 +361,7 @@ fi
 if [ $BUILD_GEMMI = true ]; then
     mkdir -p ${BUILD_DIR}/gemmi_build
     cd ${BUILD_DIR}/gemmi_build
-    emcmake cmake  -DCMAKE_EXE_LINKER_FLAGS="${LHASA_CMAKE_FLAGS}" \
+    emcmake cmake -DCMAKE_EXE_LINKER_FLAGS="${LHASA_CMAKE_FLAGS}" \
         -DCMAKE_C_FLAGS="${LHASA_CMAKE_FLAGS}"\
         -DCMAKE_CXX_FLAGS="${LHASA_CMAKE_FLAGS}" \
         -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR} ${SOURCE_DIR}/checkout/gemmi-$gemmi_release/

@@ -552,15 +552,24 @@ RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry() const {
     }
 
     int conformer_id = -1;
+    bool use_coordgen = true;
 
     try {
-        //this->rdkit_molecule->
-        conformer_id = RDKit::CoordGen::addCoords(*this->rdkit_molecule.get());
-        // RDDepict::compute2DCoords(*this->rdkit_molecule,previous_coordinate_map, true, false);
+        if(use_coordgen) {
+            auto params = RDKit::CoordGen::defaultParams;
+            params.templateMol = this->rdkit_molecule.get();
+            if(previous_coordinate_map) {
+                g_warning("TODO: Fix molecules flying around with Coordgen");
+                params.coordMap = *previous_coordinate_map;
+            }
+            conformer_id = RDKit::CoordGen::addCoords(*this->rdkit_molecule.get(), &params);
+        } else {
+            conformer_id = RDDepict::compute2DCoords(*this->rdkit_molecule, previous_coordinate_map, true, true);
+        }
+        g_debug("Conformer ID=%i %s", conformer_id, use_coordgen ? "(coordgen)" : "(RDDepict)");
     } catch(std::exception& e) {
         throw std::runtime_error(std::string("Failed to compute 2D coords with RDKit! ")+e.what());
     }
-
 
     RDKit::MatchVectType matchVect;
     if(!RDKit::SubstructMatch(*this->rdkit_molecule, *this->rdkit_molecule, matchVect)) {
@@ -576,9 +585,6 @@ RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry() const {
         RDGeom::Point2D pt2( pt3.x , pt3.y );
         coordinate_map[mv.second] = pt2;
     }
-    // what is going on here?
-    // That doesn't seem to change much
-    // RDDepict::compute2DCoords( *this->rdkit_molecule, &coordinate_map, true, true);
 
     if(coordinate_map.empty()) {
         throw std::runtime_error("RDKit coordinate mapping is empty");

@@ -28,6 +28,7 @@ pkginclude_HEADERS = \
 	utils.hpp \
 	state.hpp \
 	qed.hpp \
+	coordgen.hpp \
 	ligand_editor_canvas/core.hpp  \
 	ligand_editor_canvas/model.hpp \
 	ligand_editor_canvas/tools.hpp \
@@ -46,6 +47,7 @@ libcoot_layla_la_SOURCES = \
 	ui.cpp \
 	utils.cpp \
 	qed.cpp \
+	coordgen.cpp \
 	ligand_editor_canvas/core.cpp \
 	ligand_editor_canvas.cpp \
 	ligand_editor_canvas/model.cpp \

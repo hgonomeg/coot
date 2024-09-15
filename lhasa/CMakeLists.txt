@@ -54,6 +54,8 @@ target_sources(lh PRIVATE
   glog_replacement.cpp
   ../layla/qed.hpp
   ../layla/qed.cpp
+  ../layla/coordgen.hpp
+  ../layla/coordgen.cpp
   ../layla/utils.hpp
   ../layla/utils.cpp
   ../layla/ligand_editor_canvas.hpp

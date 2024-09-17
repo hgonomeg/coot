@@ -1,8 +1,12 @@
 #include "coordgen.hpp"
+#include <coordgen/sketcherMinimizer.h>
 #include <memory>
 
 coot::layla::CoordgenOptions::CoordgenOptions() 
-    :coordMap(nullptr)
+    :coordMap(nullptr),
+    // We may want to tinker with this
+    minimizerPrecision(0.01f),
+    coordgenScaling(60.0)
 {
 
 }
@@ -16,6 +20,14 @@ unsigned int coot::layla::addCoordgenConformer(::RDKit::RWMol& mol,  const coot:
     } else {
         opts = opts_in;
     }
+    sketcherMinimizer minimizer(opts->minimizerPrecision);
+    // Does it leak memory?
+    auto* minimizer_mol = new sketcherMinimizerMolecule();
+
+    // Does it leak memory?
+    auto conf = new RDKit::Conformer(mol.getNumAtoms());
+    conf->set3D(false);
     mol.clearConformers();
-    return -1;
+    auto res = mol.addConformer(conf, true);
+    return res;
 }

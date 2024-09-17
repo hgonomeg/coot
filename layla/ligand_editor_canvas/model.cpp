@@ -564,7 +564,9 @@ RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry() const {
             //     g_warning("TODO: Fix molecules flying around with Coordgen");
             //     params.coordMap = *previous_coordinate_map;
             // }
-            conformer_id = layla::addCoordgenConformer(*this->rdkit_molecule.get(), nullptr);
+            layla::CoordgenOptions opts;
+            opts.coordMap = previous_coordinate_map;
+            conformer_id = layla::addCoordgenConformer(*this->rdkit_molecule.get(), &opts);
         } else {
             conformer_id = RDDepict::compute2DCoords(*this->rdkit_molecule, previous_coordinate_map, true, true);
         }

@@ -108,6 +108,13 @@ unsigned int coot::layla::addCoordgenConformer(::RDKit::RWMol& mol,  const coot:
             atoms[i]->coordinates.y() / opts->coordgenScaling, 
             0.0
         );
+        // if(opts->coordMap) {
+        //     auto coord_it = opts->coordMap->find(i);
+        //     if(coord_it != opts->coordMap->end()) {
+        //         const RDGeom::Point2D& map_coords = coord_it->second;
+        //         coords = RDGeom::Point3D(map_coords.x, map_coords.y, 0.0);
+        //     }
+        // }
         conf->setAtomPos(i, coords);
     }
 

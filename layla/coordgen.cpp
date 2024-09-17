@@ -14,7 +14,7 @@ coot::layla::CoordgenOptions::CoordgenOptions()
     :coordMap(nullptr),
     // We may want to tinker with this
     // minimizerPrecision(0.01f),
-    minimizerPrecision(1.f),
+    minimizerPrecision(3.f),
     coordgenScaling(30.0)
 {
 
@@ -49,6 +49,9 @@ unsigned int coot::layla::addCoordgenConformer(::RDKit::RWMol& mol,  const coot:
                 // atom->fixed = true;
                 atom->constrained = true;
                 atom->rigid = true;
+                // atom->force = sketcherMinimizerPointF(
+                //     coords.x * opts->coordgenScaling, coords.y * opts->coordgenScaling
+                // );
                 // or just `atom->coordinates` ?
                 atom->templateCoordinates = sketcherMinimizerPointF(
                     coords.x * opts->coordgenScaling, coords.y * opts->coordgenScaling
@@ -92,6 +95,7 @@ unsigned int coot::layla::addCoordgenConformer(::RDKit::RWMol& mol,  const coot:
     // todo: stereo bonds
 
     minimizer.initialize(minimizer_mol);
+    // minimizer.minimizeMolecule(minimizer_mol);
     minimizer.runGenerateCoordinates();
 
     // Does it leak memory?

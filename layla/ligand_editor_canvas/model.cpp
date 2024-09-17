@@ -35,7 +35,7 @@
 #include <rdkit/Geometry/point.h>
 #include <rdkit/GraphMol/MolOps.h>
 #include <rdkit/GraphMol/Conformer.h>
-#include <rdkit/GraphMol/CoordGen.h>
+#include "../coordgen.hpp"
 #include <cmath>
 #include <boost/range/iterator_range.hpp>
 #include <string>
@@ -556,15 +556,15 @@ RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry() const {
 
     try {
         if(use_coordgen) {
-            auto params = RDKit::CoordGen::defaultParams;
-            // params.templateMol = this->rdkit_molecule.get();
-            params.dbg_useConstrained = true;
-            params.dbg_useFixed = true;
-            if(previous_coordinate_map) {
-                g_warning("TODO: Fix molecules flying around with Coordgen");
-                params.coordMap = *previous_coordinate_map;
-            }
-            conformer_id = RDKit::CoordGen::addCoords(*this->rdkit_molecule.get(), &params);
+            // auto params = RDKit::CoordGen::defaultParams;
+            // // params.templateMol = this->rdkit_molecule.get();
+            // params.dbg_useConstrained = true;
+            // params.dbg_useFixed = true;
+            // if(previous_coordinate_map) {
+            //     g_warning("TODO: Fix molecules flying around with Coordgen");
+            //     params.coordMap = *previous_coordinate_map;
+            // }
+            conformer_id = layla::addCoordgenConformer(*this->rdkit_molecule.get(), nullptr);
         } else {
             conformer_id = RDDepict::compute2DCoords(*this->rdkit_molecule, previous_coordinate_map, true, true);
         }

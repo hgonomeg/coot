@@ -13,8 +13,9 @@
 coot::layla::CoordgenOptions::CoordgenOptions() 
     :coordMap(nullptr),
     // We may want to tinker with this
-    minimizerPrecision(0.01f),
-    coordgenScaling(60.0)
+    // minimizerPrecision(0.01f),
+    minimizerPrecision(1.f),
+    coordgenScaling(30.0)
 {
 
 }

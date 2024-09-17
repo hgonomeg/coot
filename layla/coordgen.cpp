@@ -43,8 +43,9 @@ unsigned int coot::layla::addCoordgenConformer(::RDKit::RWMol& mol,  const coot:
             auto coord_it = opts->coordMap->find(rdatom->getIdx());
             if(coord_it != opts->coordMap->end()) {
                 const RDGeom::Point2D& coords = coord_it->second;
-                atom->fixed = true;
+                // atom->fixed = true;
                 atom->constrained = true;
+                atom->rigid = true;
                 // or just `atom->coordinates` ?
                 atom->templateCoordinates = sketcherMinimizerPointF(
                     coords.x * opts->coordgenScaling, coords.y * opts->coordgenScaling
@@ -114,6 +115,6 @@ unsigned int coot::layla::addCoordgenConformer(::RDKit::RWMol& mol,  const coot:
         tf.SetTranslation(centroid);
         MolTransforms::transformConformer(*conf, tf);
     }
-    
+
     return res;
 }

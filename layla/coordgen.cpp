@@ -30,6 +30,8 @@ unsigned int coot::layla::addCoordgenConformer(::RDKit::RWMol& mol,  const coot:
         opts = opts_in;
     }
     sketcherMinimizer minimizer(opts->minimizerPrecision);
+    // todo: maybe make this configurable?
+    minimizer.setTreatNonterminalBondsToMetalAsZOBs(false);
     // Does it leak memory?
     auto* minimizer_mol = new sketcherMinimizerMolecule();
 

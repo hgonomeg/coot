@@ -28,6 +28,8 @@
 #include "generators.hpp"
 #include "ui.hpp"
 #include <iostream>
+#include <rdkit/GraphMol/RWMol.h>
+#include <rdkit/GraphMol/SmilesParse/SmilesParse.h>
 // #include "python_utils.hpp"
 
 struct RuntimeOpts {
@@ -122,22 +124,21 @@ int main(int argc, char** argv) {
         gtk_window_present(GTK_WINDOW(win));
         gtk_application_add_window(app, GTK_WINDOW(win));
 
-        // TODO: handle smiles string from runtime_opts
+        // TODO: Fix molecule from commandline not centered
         if(opts->smiles_input) {
             g_idle_add(G_SOURCE_FUNC(+[](gpointer user_data){
-                 RuntimeOpts* opts = (RuntimeOpts*)(user_data);
-                 //opts->smiles_input
-                 //coot_ligand_editor_canvas_append_molecule(coot::layla::global_instance->get_canvas(),  std::shared_ptr<RDKit::RWMol> rdkit_mol);
-                //  RDKit::RWMol* molecule = RDKit::SmilesToMol(gtk_entry_buffer_get_text(text_buf), 0, false);
-                // if(!molecule) {
-                //     throw std::runtime_error("RDKit::RWMol* is a nullptr. The SMILES code is probably invalid.");
-                // }
-                // // We don't need that here, do we?
-                // // RDKit::MolOps::sanitizeMol(*molecule);
-                // g_info("SMILES Import: Molecule constructed.");
+                RuntimeOpts* opts = (RuntimeOpts*)(user_data);
+                RDKit::RWMol* molecule = RDKit::SmilesToMol(*opts->smiles_input, 0, false);
+                if(!molecule) {
+                    g_warning("RDKit::RWMol* is a nullptr. The SMILES code from commandline options is probably invalid.");
+                } else {
+                    g_info("SMILES Import: Molecule constructed.");
+                    coot::layla::global_instance->append_molecule(molecule);
+                }
                 return false;
             }), user_data);
         }
+
     }), &runtime_opts);
 
     auto ret = g_application_run(G_APPLICATION(app), 0, 0);

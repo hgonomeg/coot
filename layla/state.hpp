@@ -65,10 +65,6 @@ class LaylaState {
     /// Store of monomer library information
     std::unique_ptr<protein_geometry> monomer_library_info_store;
 
-    /// Adds the molecule to the canvas.
-    /// This function takes ownership of the molecule pointer.
-    int append_molecule(RDKit::RWMol* molecule_ptr);
-
     void update_status(const char* new_status) noexcept;
 
     /// The core logic of saving files
@@ -90,6 +86,10 @@ class LaylaState {
 
     bool has_unsaved_changes() const noexcept;
     void unsaved_changes_dialog_accepted();
+
+    /// Adds the molecule to the canvas.
+    /// This function takes ownership of the molecule pointer.
+    int append_molecule(RDKit::RWMol* molecule_ptr);
 
     // TOOLS
     void run_choose_element_dialog();

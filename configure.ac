@@ -330,6 +330,17 @@ else
 fi
 AC_SUBST(L_BOOST_PYTHON)
 
+AX_BOOST_PROGRAM_OPTIONS
+
+# The L_ thing is broken. Just use $BOOST_PROGRAM_OPTIONS_LIB ?
+
+# if test -z "$BOOST_PROGRAM_OPTIONS" ; then
+#     :
+# else
+#     L_BOOST_PROGRAM_OPTIONS=-l$BOOST_PROGRAM_OPTIONS_LIB
+# fi
+# AC_SUBST(L_BOOST_PROGRAM_OPTIONS)
+
 dnl =========================== RDKit =========================
 
 # this does nothing now - keep it for backwards compatibility

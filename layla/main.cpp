@@ -22,16 +22,66 @@
 // #include "Python.h"
 #include <gtk/gtk.h>
 #include <thread>
+#include <boost/program_options.hpp>
 #include "utils/coot-utils.hh"
 #include "state.hpp"
 #include "generators.hpp"
 #include "ui.hpp"
+#include <iostream>
 // #include "python_utils.hpp"
 
+struct RuntimeOpts {
+    std::optional<std::string> smiles_input;
+    std::string output_format;
+    std::optional<std::string> output_file;
+};
+
+int headless_mode(RuntimeOpts& opts) {
+    std::cout << "TODO: Headless mode \n";
+    return 0;
+}
 
 int main(int argc, char** argv) {
-
     using namespace coot::layla;
+    namespace po = boost::program_options;
+
+    po::options_description desc("Options for Layla");
+    desc.add_options()
+        ("help,h", "Show help")
+        ("smiles,s", po::value<std::string>()->value_name("SMILES"),                       "Input SMILES string")
+        ("format,f", po::value<std::string>()->value_name("FORMAT")->default_value("svg"), "Output format for headless image generation")
+        ("output,o", po::value<std::string>()->value_name("OUTPUT_FILE"),                  "Output file for headless image generation")
+    ;
+
+    po::positional_options_description pos_opt;
+    pos_opt.add("smiles", -1);
+
+    po::variables_map vm;
+    po::store(po::command_line_parser(argc, argv).
+          options(desc).positional(pos_opt).run(), vm);
+    po::notify(vm);    
+
+    if(vm.count("help")) {
+        std::cout << desc << "\n";
+        return 0;
+    }
+
+    RuntimeOpts runtime_opts;
+    if(vm.count("smiles")) {
+        runtime_opts.smiles_input = vm["smiles"].as<std::string>();
+    }
+
+    if(vm.count("format")) {
+        runtime_opts.output_format = vm["format"].as<std::string>();
+    }
+
+    if(vm.count("output")) {
+        runtime_opts.output_file = vm["output"].as<std::string>();
+    }
+
+    if(runtime_opts.smiles_input.has_value() && runtime_opts.output_file.has_value()) {
+        return headless_mode(runtime_opts);
+    }
 
     // std::thread python_init_thread([argc,argv](){
     //     setup_python_basic(argc, argv);
@@ -49,6 +99,8 @@ int main(int argc, char** argv) {
     g_application_register(G_APPLICATION(app), NULL, &error);
 
     g_signal_connect(app, "activate", G_CALLBACK(+[](GtkApplication* app, gpointer user_data) {
+
+        RuntimeOpts* opts = (RuntimeOpts*)(user_data);
 
         auto* builder = load_gtk_builder();
         coot::layla::global_layla_gtk_builder = builder;
@@ -69,7 +121,24 @@ int main(int argc, char** argv) {
 
         gtk_window_present(GTK_WINDOW(win));
         gtk_application_add_window(app, GTK_WINDOW(win));
-    }), NULL);
+
+        // TODO: handle smiles string from runtime_opts
+        if(opts->smiles_input) {
+            g_idle_add(G_SOURCE_FUNC(+[](gpointer user_data){
+                 RuntimeOpts* opts = (RuntimeOpts*)(user_data);
+                 //opts->smiles_input
+                 //coot_ligand_editor_canvas_append_molecule(coot::layla::global_instance->get_canvas(),  std::shared_ptr<RDKit::RWMol> rdkit_mol);
+                //  RDKit::RWMol* molecule = RDKit::SmilesToMol(gtk_entry_buffer_get_text(text_buf), 0, false);
+                // if(!molecule) {
+                //     throw std::runtime_error("RDKit::RWMol* is a nullptr. The SMILES code is probably invalid.");
+                // }
+                // // We don't need that here, do we?
+                // // RDKit::MolOps::sanitizeMol(*molecule);
+                // g_info("SMILES Import: Molecule constructed.");
+                return false;
+            }), user_data);
+        }
+    }), &runtime_opts);
 
     auto ret = g_application_run(G_APPLICATION(app), 0, 0);
     g_info("Exiting...");

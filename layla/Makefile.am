@@ -7,12 +7,12 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)         \
 	$(CLIPPER_CXXFLAGS)     \
 	$(RDKIT_CXXFLAGS)       \
-        $(BOOST_CPPFLAGS)       \
-	-DUSE_PYTHON=1 $(PYTHON_CPPFLAGS)      \
+    $(BOOST_CPPFLAGS)       \
 	$(GTK_CFLAGS)           \
 	$(GLIB_CFLAGS)          \
 	-DUSE_LIBCURL=1 $(CURL_CFLAGS)          \
 	$(MMDB_CXXFLAGS)
+# -DUSE_PYTHON=1 $(PYTHON_CPPFLAGS)
 
 # needed? test make dist
 #  EXTRA_DIST = layla.ui
@@ -57,7 +57,7 @@ libcoot_layla_la_LIBADD = $(top_builddir)/geometry/libcoot-geometry.la \
                           $(top_builddir)/lidia-core/libcoot-lidia-core.la \
                           $(top_builddir)/utils/libcoot-utils.la \
                           $(GTK_LIBS) $(GLIB_LIBS) \
-                          $(RDKIT_LIBS) $(CURL_LIBS) \
+                          $(RDKIT_LIBS) $(BOOST_PROGRAM_OPTIONS_LIB) $(CURL_LIBS) \
                           -lpthread
 
 libcoot_layla_la_LDFLAGS = $(SHARED_LDFLAGS)
@@ -69,7 +69,7 @@ AM_CXXFLAGS = \
 	$(SQLITE3_CFLAGS)              \
 	$(COOT_WINDOWS_CFLAGS)         \
 	$(CURL_LIBS)                   \
-        $(LIBPNG_CFLAGS)
+    $(LIBPNG_CFLAGS)
 
 # maybe libexec_PROGRAMS if/when we use a shell-script wrapper
 bin_PROGRAMS = layla

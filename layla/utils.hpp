@@ -22,8 +22,18 @@
 #ifndef LAYLA_UTILS_HPP
 #define LAYLA_UTILS_HPP
 #include <rdkit/GraphMol/RWMol.h>
+#include "ligand_editor_canvas.hpp"
 
 namespace coot::layla {
+
+
+enum class ExportMode: unsigned char {
+    PDF,
+    PNG,
+    SVG
+};
+
+void export_with_cairo(CootLigandEditorCanvas* canvas, std::string path, ExportMode mode, int width, int height);
 
 void remove_non_polar_hydrogens(RDKit::RWMol& mol);
 

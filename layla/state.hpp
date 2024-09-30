@@ -23,6 +23,7 @@
 #define LAYLA_STATE_HPP
 #include "ligand_editor_canvas.hpp"
 #include "notifier.hpp"
+#include "utils.hpp"
 #include <rdkit/GraphMol/RWMol.h>
 
 #include "geometry/protein-geometry.hh"
@@ -35,12 +36,6 @@ namespace coot::layla {
 /// Structure holding the state of the editor
 class LaylaState {
 
-    public:
-    enum class ExportMode: unsigned char {
-        PDF,
-        PNG,
-        SVG
-    };
     private:
 
     enum class UnsavedChangesDialogPurpose: unsigned char {

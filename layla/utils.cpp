@@ -26,6 +26,10 @@
 #else
 #include "../lhasa/glog_replacement.hpp"
 #endif
+#include <cairo.h>
+#include <cairo/cairo-pdf.h>
+#include <cairo/cairo-svg.h>
+#include "ligand_editor_canvas.hpp"
 
 void coot::layla::remove_non_polar_hydrogens(RDKit::RWMol& mol) {
     std::vector<RDKit::Atom*> atoms_to_be_removed;
@@ -49,5 +53,54 @@ void coot::layla::remove_non_polar_hydrogens(RDKit::RWMol& mol) {
         } catch (std::exception& e) {
             g_warning("Could not sanitize molecule while removing non-polar hydrogens: %s", e.what());
         }
+    }
+}
+
+void coot::layla::export_with_cairo(CootLigandEditorCanvas* canvas, std::string path, ExportMode mode, int width, int height) {
+    cairo_surface_t* target = nullptr;
+    auto draw = [&](){
+        if(target) {
+            cairo_t* cr = cairo_create(target);
+            coot_ligand_editor_canvas_draw_on_cairo_surface(canvas, cr);
+        }
+    };
+    auto ends_with = [](std::string const & value, std::string const & ending){
+        if (ending.size() > value.size()) 
+            return false;
+        return std::equal(ending.rbegin(), ending.rend(), value.rbegin());
+    };
+    switch (mode) {
+        case ExportMode::PDF: {
+            if(!ends_with(path, ".pdf")) {
+                path += ".pdf";
+            }
+            target = cairo_pdf_surface_create(path.c_str(), width, height);
+            draw();
+            break;
+        }
+        case ExportMode::PNG: {
+            // target = cairo_image_surface_create(CAIRO_FORMAT_RGBA128F, width, height);
+            target = cairo_image_surface_create(CAIRO_FORMAT_RGB24, width, height);
+            draw();
+            if(!ends_with(path, ".png")) {
+                path += ".png";
+            }
+            cairo_surface_write_to_png(target, path.c_str());
+            break;
+        }
+        case ExportMode::SVG: {
+            if(!ends_with(path, ".svg")) {
+                path += ".svg";
+            }
+            target = cairo_svg_surface_create(path.c_str(), width, height);
+            draw();
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+    if(target) {
+        cairo_surface_destroy(target);
     }
 }

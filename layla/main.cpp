@@ -27,6 +27,7 @@
 #include "state.hpp"
 #include "generators.hpp"
 #include "ui.hpp"
+#include "utils.hpp"
 #include <iostream>
 #include <rdkit/GraphMol/RWMol.h>
 #include <rdkit/GraphMol/SmilesParse/SmilesParse.h>
@@ -38,6 +39,8 @@ struct RuntimeOpts {
     std::optional<std::string> output_file;
 };
 
+
+
 int headless_mode(RuntimeOpts& opts) {
     RDKit::RWMol* molecule = RDKit::SmilesToMol(*opts.smiles_input, 0, false);
     if(!molecule) {
@@ -46,12 +49,17 @@ int headless_mode(RuntimeOpts& opts) {
     }
     auto mol_shptr = std::shared_ptr<RDKit::RWMol>(molecule);
     CootLigandEditorCanvas* canvas = coot_ligand_editor_canvas_new();
+    // todo: center the molecule here
     if(coot_ligand_editor_canvas_append_molecule(canvas, std::move(mol_shptr)) == -1) {
         std::cerr << "coot_ligand_editor_canvas_append_molecule() returned -1: The molecule could not be appended to the canvas.";
         g_object_ref_sink(canvas);
         return 2;
     }
     std::cout << "TODO: Headless mode \n";
+    // todo: unify export at state.cpp
+    // todo: parse export mode
+    // todo: width and height
+    coot::layla::export_with_cairo(canvas, *opts.output_file, coot::layla::ExportMode::SVG, 640, 480);
     g_object_ref_sink(canvas);
     return 0;
 }

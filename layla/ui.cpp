@@ -21,6 +21,7 @@
 
 #include "ui.hpp"
 #include "state.hpp"
+#include "utils.hpp"
 #include "ligand_editor_canvas.hpp"
 #include "ligand_editor_canvas/core.hpp"
 #include "ligand_editor_canvas/model.hpp"
@@ -49,7 +50,7 @@ void setup_actions(coot::layla::LaylaState* state, GtkApplicationWindow* win, Gt
         //return std::make_pair(detailed_action_name,action);
     };
 
-    using ExportMode = coot::layla::LaylaState::ExportMode;
+    // using ExportMode = coot::layla::ExportMode;
 
     // File
     new_action("file_new", G_CALLBACK(+[](GSimpleAction* self, GVariant* parameter, gpointer user_data){

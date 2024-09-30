@@ -239,6 +239,10 @@ class CanvasMolecule {
     /// Scale used by the widget
     float canvas_scale;
 
+    /// Determines if libcoordgen is to be used for determining atom coordinates.
+    /// Uses RDDepict if false
+    bool use_coordgen;
+
     /// The top-left and bottom-right points, in between which the molecule lies.
     /// The coordinates are in "RDKit space".
     /// They have to be multiplied by scale and added to the offsets to get on-screen coordinates
@@ -294,7 +298,7 @@ class CanvasMolecule {
 
     public:
 
-    CanvasMolecule(std::shared_ptr<RDKit::RWMol> rdkit_mol, bool allow_invalid_mol);
+    CanvasMolecule(std::shared_ptr<RDKit::RWMol> rdkit_mol, bool allow_invalid_mol, bool use_coordgen);
 
     /// Replaces the inner shared_ptr to the molecule
     /// from which the CanvasMolecule is lowered.
@@ -323,6 +327,9 @@ class CanvasMolecule {
 
     /// Sets the scale for drawing
     void set_canvas_scale(float scale);
+
+    /// Updates `use_coordgen` setting.
+    void set_coordgen_enabled(bool value) noexcept;
 
     void apply_canvas_translation(int delta_x, int delta_y) noexcept;
     std::pair<float,float> get_on_screen_coords(float x, float y) const noexcept;

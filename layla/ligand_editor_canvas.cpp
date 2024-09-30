@@ -94,6 +94,7 @@ CootLigandEditorCanvas::CootLigandEditorCanvas() noexcept {
     self->display_mode = DisplayMode::Standard;
     self->scale = 1.0;
     self->allow_invalid_molecules = false;
+    self->use_coordgen = false;
     self->state_stack_pos = -1;
 }
 
@@ -575,7 +576,7 @@ int coot_ligand_editor_canvas_append_molecule(CootLigandEditorCanvas* self, std:
         g_debug("Appending new molecule to the widget...");
         // Might throw if the constructor fails.
         self->begin_edition();
-        self->molecules->push_back(CanvasMolecule(rdkit_mol, self->allow_invalid_molecules));
+        self->molecules->push_back(CanvasMolecule(rdkit_mol, self->allow_invalid_molecules, self->use_coordgen));
         self->molecules->back()->set_canvas_scale(self->scale);
         #ifndef __EMSCRIPTEN__
         self->molecules->back()->apply_canvas_translation(
@@ -683,6 +684,19 @@ void coot_ligand_editor_canvas_set_allow_invalid_molecules(CootLigandEditorCanva
 
 bool coot_ligand_editor_canvas_get_allow_invalid_molecules(CootLigandEditorCanvas* self) noexcept {
     return self->allow_invalid_molecules;
+}
+
+void coot_ligand_editor_canvas_set_coordgen_mode_enabled(CootLigandEditorCanvas* self, bool value) noexcept {
+    g_debug("Coordgen mode set to %s", value ? "true" : "false");
+    self->use_coordgen = value;
+    for(auto& mol_opt: *self->molecules) {
+        if(mol_opt) {
+            mol_opt->set_coordgen_enabled(value);
+        }
+    }
+}
+bool coot_ligand_editor_canvas_get_coordgen_mode_enabled(CootLigandEditorCanvas* self) noexcept {
+    return self->use_coordgen;
 }
 
 DisplayMode coot_ligand_editor_canvas_get_display_mode(CootLigandEditorCanvas* self) noexcept {

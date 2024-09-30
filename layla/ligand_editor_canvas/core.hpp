@@ -128,6 +128,7 @@ struct WidgetCoreData {
     float scale;
 
     bool allow_invalid_molecules;
+    bool use_coordgen;
 
     DisplayMode display_mode;
 
@@ -247,6 +248,8 @@ struct CootLigandEditorCanvas : coot::ligand_editor_canvas::impl::CootLigandEdit
     unsigned int get_max_molecule_idx() noexcept;
     void set_allow_invalid_molecules(bool value) noexcept;
     bool get_allow_invalid_molecules() noexcept;
+    void set_coordgen_mode_enabled(bool value) noexcept;
+    bool get_coordgen_mode_enabled() noexcept;
     coot::ligand_editor_canvas::DisplayMode get_display_mode() noexcept;
     void set_display_mode(coot::ligand_editor_canvas::DisplayMode value) noexcept;
     coot::ligand_editor_canvas::SmilesMap get_smiles() noexcept;

@@ -89,6 +89,10 @@ void CanvasMolecule::set_canvas_scale(float scale) {
     this->canvas_scale = scale;
 }
 
+void CanvasMolecule::set_coordgen_enabled(bool value) noexcept {
+    this->use_coordgen = value;
+}
+
 CanvasMolecule::MaybeAtomOrBond CanvasMolecule::resolve_click(int x, int y) const noexcept {
     float scale = this->get_scale();
     auto x_offset = this->x_canvas_translation * scale;
@@ -369,7 +373,9 @@ void CanvasMolecule::draw(impl::Renderer& ren, DisplayMode display_mode) const n
     renctx.draw_bonds();
 }
 
-CanvasMolecule::CanvasMolecule(std::shared_ptr<RDKit::RWMol> rdkit_mol, bool allow_invalid_mol) {
+CanvasMolecule::CanvasMolecule(std::shared_ptr<RDKit::RWMol> rdkit_mol, bool allow_invalid_mol, bool use_coordgen) {
+    this->canvas_scale = 1.0f;
+    this->use_coordgen = use_coordgen;
     this->rdkit_molecule = std::move(rdkit_mol);
     this->cached_atom_coordinate_map = std::nullopt;
     this->bounding_atom_coords = std::make_pair(RDGeom::Point2D(0,0),RDGeom::Point2D(0,0));
@@ -552,10 +558,9 @@ RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry() const {
     }
 
     int conformer_id = -1;
-    bool use_coordgen = true;
 
     try {
-        if(use_coordgen) {
+        if(this->use_coordgen) {
             auto params = RDKit::CoordGen::defaultParams;
             // params.templateMol = this->rdkit_molecule.get();
             params.dbg_useConstrained = true;

@@ -39,7 +39,20 @@ struct RuntimeOpts {
 };
 
 int headless_mode(RuntimeOpts& opts) {
+    RDKit::RWMol* molecule = RDKit::SmilesToMol(*opts.smiles_input, 0, false);
+    if(!molecule) {
+        std::cerr << "RDKit::RWMol* is a nullptr. The SMILES code from commandline options is probably invalid.";
+        return 1;
+    }
+    auto mol_shptr = std::shared_ptr<RDKit::RWMol>(molecule);
+    CootLigandEditorCanvas* canvas = coot_ligand_editor_canvas_new();
+    if(coot_ligand_editor_canvas_append_molecule(canvas, std::move(mol_shptr)) == -1) {
+        std::cerr << "coot_ligand_editor_canvas_append_molecule() returned -1: The molecule could not be appended to the canvas.";
+        g_object_ref_sink(canvas);
+        return 2;
+    }
     std::cout << "TODO: Headless mode \n";
+    g_object_ref_sink(canvas);
     return 0;
 }
 
@@ -81,6 +94,12 @@ int main(int argc, char** argv) {
         runtime_opts.output_file = vm["output"].as<std::string>();
     }
 
+    // Unfortunately, we have to do that here even though we're not using GUI for headless mode.
+    // The reason is that the canvas is a GtkWidget.
+    //
+    // Luckily this does not seem to be a big deal.
+    gtk_init();
+
     if(runtime_opts.smiles_input.has_value() && runtime_opts.output_file.has_value()) {
         return headless_mode(runtime_opts);
     }
@@ -92,8 +111,6 @@ int main(int argc, char** argv) {
     // });
 
     // python_init_thread.detach();
-
-    gtk_init();
 
     GtkApplication* app = gtk_application_new("org.pemsley.Layla", G_APPLICATION_NON_UNIQUE);
 

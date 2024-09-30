@@ -1,6 +1,0 @@
-#ifndef LAYLA_COORDGEN_HPP
-#define LAYLA_COORDGEN_HPP
-
-
-
-#endif

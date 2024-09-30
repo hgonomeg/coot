@@ -551,6 +551,11 @@ G_END_DECLS
 
 void coot_ligand_editor_canvas_set_scale(CootLigandEditorCanvas* self, float display_scale) noexcept {
     self->scale = display_scale;
+    for(auto& mol_opt: *self->molecules) {
+        if(mol_opt) {
+            mol_opt->set_canvas_scale(display_scale);
+        }
+    }
     _LIGAND_EDITOR_SIGNAL_EMIT_ARG(self, scale_changed_signal,self->scale);
     self->queue_redraw();
     self->queue_resize();

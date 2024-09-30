@@ -278,12 +278,11 @@ int WidgetCoreData::get_first_molecule_idx() const noexcept {
     return -1;
 }
 
-void WidgetCoreData::render(Renderer& ren) {
+void WidgetCoreData::render(Renderer& ren) const {
     if (this->molecules) {
         for(auto& drawn_molecule_opt: *this->molecules) {
             if(drawn_molecule_opt.has_value()) {
-                drawn_molecule_opt->set_canvas_scale(this->scale);
-                drawn_molecule_opt->draw(ren,this->display_mode);
+                drawn_molecule_opt->draw(ren, this->display_mode);
             }
         }
     } else {

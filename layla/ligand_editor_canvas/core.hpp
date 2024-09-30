@@ -132,7 +132,7 @@ struct WidgetCoreData {
 
     DisplayMode display_mode;
 
-    void render(Renderer&);
+    void render(Renderer&) const;
 
     /// Does Edit->Undo
     void undo_edition();

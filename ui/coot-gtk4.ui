@@ -7714,7 +7714,7 @@ Do you want to continue?
                 <property name="hexpand">True</property>
                 <property name="visible">True</property>
                 <property name="transition-type">GTK_REVEALER_TRANSITION_TYPE_SLIDE_UP</property>
-                <property name="transition-duration">350</property>
+                <property name="transition-duration">300</property>
                 <property name="can-focus">True</property>
                 <child>
                   <object class="GtkOverlay" id="python_scripting_overlay">
@@ -7993,6 +7993,15 @@ Do you want to continue?
                 <property name="halign">center</property>
                 <property name="valign">start</property>
                 <property name="label" translatable="yes"> Session Saved </property>
+              </object>
+            </child>
+
+            <child type="overlay">
+              <object class="GtkLabel" id="partition_map_by_chain_status_label">
+                <property name="visible">False</property>
+                <property name="halign">center</property>
+                <property name="valign">start</property>
+                <property name="label" translatable="yes">Pending...</property>
               </object>
             </child>
 
@@ -9713,14 +9722,14 @@ density (too big to be waters):
             </child>
           </object>
         </child>
-         <child type="action">
-              <object class="GtkButton" id="map_sharpening_dialog_ok_button">
-                <property name="label">OK</property>
-                <property name="margin-top">4</property>
-                <property name="margin-bottom">4</property>
-                <property name="margin-start">6</property>
-                <property name="margin-end">6</property>
-              </object>
+        <child type="action">
+          <object class="GtkButton" id="map_sharpening_dialog_ok_button">
+            <property name="label">OK</property>
+            <property name="margin-top">4</property>
+            <property name="margin-bottom">4</property>
+            <property name="margin-start">6</property>
+            <property name="margin-end">6</property>
+          </object>
         </child>
       </object>
     </child>
@@ -9729,6 +9738,72 @@ density (too big to be waters):
     </action-widgets>
   </object>
 
+  <object class="GtkDialog" id="map_partition_by_chain_dialog">
+    <property name="title" translatable="yes">Coot: Partition Map by Chain</property>
+    <property name="default-width">500</property>
+    <signal name="response" handler="on_map_partition_by_chain_dialog_response" swapped="no"/>
+    <child>
+      <object class="GtkBox" id="map_partition_by_chain_vbox_internal">
+        <property name="orientation">vertical</property>
+        <property name="spacing">2</property>
+        <child>
+          <object class="GtkLabel">
+            <property name="label" translatable="yes">Map</property>
+            <property name="justify">center</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkComboBoxText" id="map_partition_by_chain_map_combobox">
+            <property name="margin-top">4</property>
+            <property name="margin-bottom">4</property>
+            <property name="margin-start">6</property>
+            <property name="margin-end">6</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel">
+            <property name="label" translatable="yes">Model</property>
+            <property name="justify">center</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkComboBoxText" id="map_partition_by_chain_model_combobox">
+            <property name="margin-top">4</property>
+            <property name="margin-bottom">4</property>
+            <property name="margin-start">6</property>
+            <property name="margin-end">6</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">horizontal</property>
+            <property name="halign">end</property>
+            <property name="margin-top">4</property>
+            <property name="margin-bottom">4</property>
+            <property name="margin-start">6</property>
+            <property name="margin-end">6</property>
+            <property name="spacing">10</property>
+            <child type="action">
+              <object class="GtkButton" id="map_partition_by_chain_cancel_button">
+                <property name="label" translatable="yes">Cancel</property>
+              </object>
+            </child>
+            <child type="action">
+              <object class="GtkButton" id="map_partition_by_chain_ok_button">
+                <property name="label" translatable="yes">  OK  </property>
+              </object>
+            </child>
+          </object>
+        </child>
+
+      </object>
+    </child>
+    <action-widgets>
+      <action-widget response="-6">map_partition_by_chain_cancel_button</action-widget>
+      <action-widget response="-5">map_partition_by_chain_ok_button</action-widget>
+    </action-widgets>
+  </object>
+  
   <object class="GtkDialog" id="merge_molecules_dialog">
     <property name="title" translatable="yes">Coot: Merge Molecules</property>
     <child>

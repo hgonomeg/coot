@@ -100,19 +100,49 @@ void init_framebuffers(GtkWidget *glarea) {
 void
 new_startup_realize(GtkWidget *gl_area) {
 
-   // std::cout << "new_startup_realize() ------------------- start ------------------"
-   //              << std::endl;
+   GdkDisplay *display = gdk_display_get_default();
+   GListModel* lm = gdk_display_get_monitors(display);
+
+   guint n_items = g_list_model_get_n_items(lm);
+   if (n_items > 0) {
+      for (unsigned int i=0; i<n_items; i++) {
+         gpointer item = g_list_model_get_item(lm, i);
+         int imon = i + 1;
+         GdkMonitor *monitor = GDK_MONITOR(item);
+         const char *monitor_description = gdk_monitor_get_description(monitor);
+         const char *monitor_connection  = gdk_monitor_get_connector(monitor);
+         if (monitor_description)
+            std::cout << "INFO:: monitor " << imon << " description " << monitor_description << std::endl;
+         else
+            std::cout << "INFO:: monitor " << imon << " no description " << std::endl;
+         if (monitor_connection)
+            std::cout << "INFO:: monitor " << imon << " connection "  << monitor_connection  << std::endl;
+         int monitor_refresh_rate = gdk_monitor_get_refresh_rate(monitor);
+         std::cout << "INFO:: monitor " << imon << " refresh rate " << monitor_refresh_rate << " mHz"  << std::endl;
+         int monitor_scale_factor = gdk_monitor_get_scale_factor(monitor);
+         std::cout << "INFO:: monitor " << imon << " scale_factor " << monitor_scale_factor << std::endl;
+#if GTK_MINOR_VERSION >= 14
+         double monitor_scale = gdk_monitor_get_scale(monitor);
+         std::cout << "INFO:: monitor " << imon << " scale " << monitor_scale << std::endl;
+#endif
+      }
+   }
 
    gtk_gl_area_make_current(GTK_GL_AREA (gl_area));
 
-   if (gtk_gl_area_get_error(GTK_GL_AREA (gl_area)) != NULL)
+   GError* error = gtk_gl_area_get_error(GTK_GL_AREA (gl_area));
+   if (error != NULL) {
+      std::cout << "WARNING:: new_startup_realize() gtk_gl_area_get_error() returned an error: " << std::endl;
+      std::cout << error->message << std::endl;
       return;
+   }
 
    GdkGLContext *context = gtk_gl_area_get_context(GTK_GL_AREA(gl_area));
 
    gtk_gl_area_set_has_depth_buffer(GTK_GL_AREA(gl_area), TRUE);
 
    print_opengl_info();
+
 
    int w = 500;
    int h = 500;
@@ -211,6 +241,7 @@ new_startup_on_glarea_resize(GtkGLArea *glarea, gint width, gint height) {
    g.reset_frame_buffers(width, height); // currently makes the widget blank (not drawn)
    g.resize_framebuffers_textures_renderbuffers(width, height); // 20220131-PE added from crows merge
    g.reset_hud_buttons_size_and_position();
+   g.mouse_speed = static_cast<double>(width) / 900.0;
 
    if (false) {
 
@@ -224,6 +255,12 @@ new_startup_on_glarea_resize(GtkGLArea *glarea, gint width, gint height) {
       }
    }
 
+}
+
+void
+new_startup_on_glarea_enter(GtkGLArea *glarea) {
+
+  std::cout << "enter!" << std::endl;
 }
 
 // void on_glarea_realize(GtkWidget *widget); // using this give linking problems.
@@ -241,6 +278,7 @@ GtkWidget *new_startup_create_glarea_widget() {
    g_signal_connect(gl_area, "unrealize", G_CALLBACK(new_startup_unrealize), NULL);
    g_signal_connect(gl_area, "render",    G_CALLBACK(new_startup_on_glarea_render),  NULL);
    g_signal_connect(gl_area, "resize",    G_CALLBACK(new_startup_on_glarea_resize),  NULL);
+   // g_signal_connect(gl_area, "enter",     G_CALLBACK(new_startup_on_glarea_enter),  NULL);
 
    gtk_widget_set_can_focus(gl_area, TRUE);
    gtk_widget_set_focusable(gl_area, TRUE);
@@ -717,6 +755,26 @@ struct application_activate_data {
    }
 };
 
+gboolean
+on_app_window_key_controller_key_pressed(GtkEventControllerKey *controller,
+                                     guint                  keyval,
+                                     guint                  keycode,
+                                     guint                  modifiers,
+                                     GtkButton             *button) {
+
+   std::cout << "app window keypressed! " << keyval << " " << keycode << std::endl;
+   gboolean handled = FALSE;
+   return handled;
+}
+
+void
+add_key_bindings_for_application_window(GtkWidget *app_window) {
+
+   GtkEventController *key_controller = gtk_event_controller_key_new();
+   g_signal_connect(key_controller, "key-pressed",  G_CALLBACK(on_app_window_key_controller_key_pressed), app_window);
+   gtk_widget_add_controller(app_window, key_controller);
+}
+
 
 void
 new_startup_application_activate(GtkApplication *application,
@@ -734,6 +792,8 @@ new_startup_application_activate(GtkApplication *application,
    GtkWidget *app_window = gtk_application_window_new(application);
    gtk_window_set_application(GTK_WINDOW(app_window), application);
    gtk_window_set_title(GTK_WINDOW(app_window), window_name.c_str());
+
+   add_key_bindings_for_application_window(app_window);
 
    graphics_info_t::set_main_window(app_window);
 
@@ -782,7 +842,7 @@ new_startup_application_activate(GtkApplication *application,
       } else {
          std::cout << "ERROR:: in new_startup_application_activate() builder was NOT a builder"
                   << std::endl;
-         exit(0);
+         coot_no_state_real_exit(0);
       }
 
       install_icons_into_theme(GTK_WIDGET(app_window));
@@ -804,7 +864,7 @@ new_startup_application_activate(GtkApplication *application,
       if (status == FALSE) {
          std::cout << "ERROR:: Failure to read or parse " << ui_file_full << std::endl;
          std::cout << error->message << std::endl;
-         exit(0);
+         coot_no_state_real_exit(0);
       }
 
       // the preferences builder:
@@ -819,7 +879,7 @@ new_startup_application_activate(GtkApplication *application,
       if (status == FALSE) {
          std::cout << "ERROR:: Failure to read or parse " << preferences_ui_file_name_full << std::endl;
          std::cout << error->message << std::endl;
-         exit(0);
+         coot_no_state_real_exit(0);
       }
       graphics_info_t::set_preferences_gtkbuilder(preferences_builder);
 

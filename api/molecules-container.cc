@@ -42,7 +42,6 @@
 // statics
 std::atomic<bool> molecules_container_t::restraints_lock(false);
 std::atomic<bool> molecules_container_t::on_going_updating_map_lock(false);
-ctpl::thread_pool molecules_container_t::static_thread_pool(8); // or so
 std::string molecules_container_t::restraints_locking_function_name; // I don't know why this needs to be static
 std::vector<atom_pull_info_t> molecules_container_t::atom_pulls;
 // 20221018-PE not sure that this needs to be static.
@@ -738,9 +737,14 @@ molecules_container_t::import_cif_dictionary(const std::string &cif_file_name, i
                                                                  cif_dictionary_read_number, imol_enc);
    cif_dictionary_read_number++;
 
-   std::cout << "debug:: import_cif_dictionary() cif_file_name(): " << cif_file_name
-             << " success " << r.success << " with " << r.n_atoms << " atoms " << r.n_bonds
-             << " bonds " << r.n_links << " links and momoner index " << r.monomer_idx << std::endl;
+   if (true)
+      std::cout << "debug:: import_cif_dictionary() cif_file_name: " << cif_file_name
+                << " for imol_enc " << imol_enc << " success " << r.success << " with "
+                << r.n_atoms << " atoms " << r.n_bonds << " bonds " << r.n_links << " links"
+                << " and monomer_idx " << r.monomer_idx << std::endl;
+
+   if (false)
+      geom.print_dictionary_store();
 
    return r.success;
 
@@ -1210,7 +1214,7 @@ molecules_container_t::read_ccp4_map(const std::string &file_name, bool is_a_dif
       }
    }
 
-   if (true) {
+   if (false) {
       if (is_valid_map_molecule(imol)) {
          short int em_status = molecules[imol].is_EM_map();
          std::cout << "here with imol " << imol << " molecules size " << molecules.size() << std::endl;
@@ -2125,7 +2129,7 @@ molecules_container_t::get_map_contours_mesh(int imol, double position_x, double
             update_updating_maps(updating_maps_info.imol_model);
          }
 
-         mesh = molecules[imol].get_map_contours_mesh(position, radius, contour_level, map_is_contoured_using_thread_pool_flag, &static_thread_pool);
+         mesh = molecules[imol].get_map_contours_mesh(position, radius, contour_level, map_is_contoured_using_thread_pool_flag, &thread_pool);
       } else {
          std::cout << "WARNING:: get_map_contours_mesh() Not a valid map molecule " << imol << std::endl;
       }
@@ -2496,7 +2500,7 @@ molecules_container_t::add_terminal_residue_directly(int imol, const std::string
          clipper::Xmap<float> &xmap = molecules[imol_refinement_map].xmap;
          coot::residue_spec_t residue_spec(chain_id, res_no, ins_code);
          std::pair<int, std::string> m = molecules[imol].add_terminal_residue_directly(residue_spec, new_res_type,
-                                                                                       geom, xmap, static_thread_pool);
+                                                                                       geom, xmap, thread_pool);
          status  = m.first;
          message = m.second;
          if (! message.empty())
@@ -2859,8 +2863,8 @@ int
 molecules_container_t::refine_residues_using_atom_cid(int imol, const std::string &cid, const std::string &mode, int n_cycles) {
 
    auto debug_selected_residues = [cid] (const std::vector<mmdb::Residue *> &rv) {
-      std::cout << "refine_residues_using_atom_cid(): selected these " << rv.size() << " residues "
-         " from cid: " << cid << std::endl;
+      std::cout << "refine_residues_using_atom_cid(): selected these " << rv.size() << " residues"
+         " from cid: \"" << cid << "\"" << std::endl;
       std::vector<mmdb::Residue *>::const_iterator it;
       for (it=rv.begin(); it!=rv.end(); ++it) {
          std::cout << "   " << coot::residue_spec_t(*it) << std::endl;
@@ -3533,7 +3537,7 @@ molecules_container_t::make_last_restraints(const std::vector<std::pair<bool,mmd
 
    unsigned int n_threads = coot::get_max_number_of_threads();
    if (n_threads > 0)
-      last_restraints->thread_pool(&static_thread_pool, n_threads);
+      last_restraints->thread_pool(&thread_pool, n_threads);
 
    all_atom_pulls_off();
    particles_have_been_shown_already_for_this_round_flag = false;
@@ -4226,7 +4230,7 @@ molecules_container_t::get_non_standard_residues_in_molecule(int imol) const {
 
 coot::simple_mesh_t
 molecules_container_t::get_molecular_representation_mesh(int imol, const std::string &cid, const std::string &colour_scheme,
-                                                         const std::string &style) {
+                                                         const std::string &style, int secondary_structure_usage_flag) {
 
    coot::simple_mesh_t mesh;
    if (is_valid_model_molecule(imol)) {
@@ -4245,7 +4249,7 @@ molecules_container_t::get_molecular_representation_mesh(int imol, const std::st
       add_colour_rule(imol, "//A/276-283", "green");
 #endif
 
-      mesh = molecules[imol].get_molecular_representation_mesh(cid, colour_scheme, style);
+      mesh = molecules[imol].get_molecular_representation_mesh(cid, colour_scheme, style, secondary_structure_usage_flag);
    } else {
       std::cout << "debug:: " << __FUNCTION__ << "(): not a valid model molecule " << imol << std::endl;
    }
@@ -4885,7 +4889,7 @@ molecules_container_t::init_refinement_of_molecule_as_fragment_based_on_referenc
             const clipper::Xmap<float> &xmap = molecules[imol_map].xmap;
             std::cout << "debug:: in init_refinement_of_molecule_as_fragment_based_on_reference() "
                       << " cell " << xmap.cell().descr().format() << std::endl;
-            molecules[imol_frag].init_all_molecule_refinement(imol_ref, geom, xmap, map_weight, &static_thread_pool);
+            molecules[imol_frag].init_all_molecule_refinement(imol_ref, geom, xmap, map_weight, &thread_pool);
          } else {
             std::cout << "WARNING:: in init_refinement_of_molecule_as_fragment_based_on_reference()"
                       << " not a valid map" << std::endl;
@@ -5048,7 +5052,7 @@ molecules_container_t::get_mesh_for_ligand_validation_vs_dictionary(int imol, co
 
    coot::simple_mesh_t m;
    if (is_valid_model_molecule(imol)) {
-      m = molecules[imol].get_mesh_for_ligand_validation_vs_dictionary(ligand_cid, geom, static_thread_pool);
+      m = molecules[imol].get_mesh_for_ligand_validation_vs_dictionary(ligand_cid, geom, thread_pool);
    } else {
       std::cout << "WARNING:: " << __FUNCTION__ << "(): not a valid model molecule " << imol << std::endl;
    }
@@ -5060,15 +5064,17 @@ molecules_container_t::get_mesh_for_ligand_validation_vs_dictionary(int imol, co
 //! return type is validation data, not a mesh
 //!
 //! @return a vector of `geometry_distortion_info_container_t`
-void
+std::vector<coot::geometry_distortion_info_container_t>
 molecules_container_t::get_ligand_validation_vs_dictionary(int imol, const std::string &ligand_cid,
                                                            bool with_nbcs) {
 
+   std::vector<coot::geometry_distortion_info_container_t> v;
    if (is_valid_model_molecule(imol)) {
-      molecules[imol].geometric_distortions_from_mol(ligand_cid, with_nbcs, geom, static_thread_pool);
+      v = molecules[imol].geometric_distortions_from_mol(ligand_cid, with_nbcs, geom, thread_pool);
    } else {
       std::cout << "WARNING:: " << __FUNCTION__ << "(): not a valid model molecule " << imol << std::endl;
    }
+   return v;
 }
 
 
@@ -5271,7 +5277,7 @@ molecules_container_t::get_hb_type(const std::string &compound_id, int imol_enc,
 void
 molecules_container_t::set_max_number_of_threads(unsigned int n_threads) {
    coot::set_max_number_of_threads(n_threads);
-   static_thread_pool.resize(n_threads);
+   thread_pool.resize(n_threads);
 }
 
 // call the above function
@@ -5337,7 +5343,7 @@ molecules_container_t::test_launching_threads(unsigned int n_threads_per_batch, 
 
 //! @return time in microsections
 double
-molecules_container_t::test_thread_pool_threads(unsigned int n_threads) const {
+molecules_container_t::test_thread_pool_threads(unsigned int n_threads) {
 
    auto sum = [] (unsigned int thread_index, unsigned int i, unsigned int j, std::atomic<unsigned int> &done_count_for_threads) {
       done_count_for_threads++;
@@ -5349,7 +5355,7 @@ molecules_container_t::test_thread_pool_threads(unsigned int n_threads) const {
    std::atomic<unsigned int> done_count_for_threads(0);
 
    for (unsigned int i=0; i<n_threads; i++) {
-      static_thread_pool.push(sum, i, i, std::ref(done_count_for_threads));
+      thread_pool.push(sum, i, i, std::ref(done_count_for_threads));
    }
    while (done_count_for_threads < n_threads)
       std::this_thread::sleep_for(std::chrono::nanoseconds(300));
@@ -5360,6 +5366,20 @@ molecules_container_t::test_thread_pool_threads(unsigned int n_threads) const {
    return t;
 
 }
+
+namespace mmcif_tests {
+   int run_tests(bool last_test_only);
+}
+
+//! a test for mmdb/gemmi/mmcif functionality
+int
+molecules_container_t::mmcif_tests(bool last_test_only) {
+
+   int status = mmcif_tests::run_tests(last_test_only);
+   return status;
+
+}
+
 
 
 //! @return a vector of string pairs that were part of a gphl_chem_comp_info.
@@ -5375,6 +5395,52 @@ molecules_container_t::get_gphl_chem_comp_info(const std::string &compound_id, i
    }
    return v;
 }
+
+//! get a list of atom names and their associated atedrg atom types
+//!
+//! @return a list of atom names and their associated atedrg atom types, return an empty list
+//! on failure (atoms types are not in the dictionary or atom failure to look up the compound id)l
+std::vector<std::pair<std::string, std::string> >
+molecules_container_t::get_acedrg_atom_types(const std::string &compound_id, int imol_enc) const {
+
+   std::vector<std::pair<std::string, std::string> > v;
+   std::pair<bool, coot::dictionary_residue_restraints_t> r_p =
+      geom.get_monomer_restraints(compound_id, imol_enc);
+   if (r_p.first) {
+      const auto &restraints = r_p.second;
+      const auto &atom_info = restraints.atom_info;
+      for (unsigned int iat=0; iat<atom_info.size(); iat++) {
+         const auto &atom = atom_info[iat];
+         const auto &atom_id = atom.atom_id;
+         const auto &acedrg_atom_type = atom.acedrg_atom_type;
+         if (! acedrg_atom_type.empty()) {
+            auto pair = std::make_pair(atom_id, acedrg_atom_type);
+            v.push_back(pair);
+         }
+      }
+   }
+   return v;
+
+}
+
+//! get acedrg types for ligand bonds
+//! @return a vector of `acedrg_types_for_residue_t`
+coot::acedrg_types_for_residue_t
+molecules_container_t::get_acedrg_atom_types_for_ligand(int imol, const std::string &residue_cid) const {
+
+   coot::acedrg_types_for_residue_t types;
+
+   if (is_valid_model_molecule(imol)) {
+      mmdb::Residue *residue_p = molecules[imol].get_residue(residue_cid);
+      if (residue_p) {
+         int imol_enc = imol;
+         types = coot::get_acedrg_types_for_residue(residue_p, imol_enc, geom);
+      }
+   }
+   return types;
+}
+
+
 
 
 //! export map molecule as glTF
@@ -5414,10 +5480,12 @@ molecules_container_t::export_model_molecule_as_gltf(int imol,
 void
 molecules_container_t::export_molecular_represenation_as_gltf(int imol, const std::string &atom_selection_cid,
                                                               const std::string &colour_scheme, const std::string &style,
+                                                              int secondary_structure_usage_flag,
                                                               const std::string &file_name) {
 
    if (is_valid_model_molecule(imol)) {
-      molecules[imol].export_molecular_represenation_as_gltf(atom_selection_cid, colour_scheme, style, file_name);
+      molecules[imol].export_molecular_represenation_as_gltf(atom_selection_cid, colour_scheme, style,
+                                                             secondary_structure_usage_flag, file_name);
    } else {
       std::cout << "WARNING:: " << __FUNCTION__ << "(): not a valid model molecule " << imol << std::endl;
    }

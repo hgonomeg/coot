@@ -129,7 +129,7 @@ class molecules_container_t {
    bool use_torsion_restraints;
    float torsion_restraints_weight;
 
-   static ctpl::thread_pool static_thread_pool; // does this need to be static?
+   ctpl::thread_pool thread_pool;
    bool show_timings;
 
    coot::restraints_container_t *last_restraints;
@@ -306,6 +306,7 @@ class molecules_container_t {
       use_gemmi = true;
       imol_refinement_map = -1;
       imol_difference_map = -1;
+      thread_pool.resize(8);
       setup_syminfo();
       mmdb::InitMatType();
       geometry_init_standard(); // do this by default now
@@ -382,8 +383,12 @@ public:
    //!
    //! @param state is `true` to mean that it is enabled. The default is `true`.
    void set_make_backups(bool state) { make_backups_flag = state; }
+
+   //! get the state of the backups
+   //!
    //! @return the backup-enabled state
    bool get_make_backups() const { return make_backups_flag; }
+
    //! the backup-enable state (raw public if needed/prefered)
    bool make_backups_flag;
 
@@ -662,6 +667,16 @@ public:
    //!  return an empty vector on failure to find any such info.
    std::vector<std::pair<std::string, std::string> > get_gphl_chem_comp_info(const std::string &compound_id, int imol_enc);
 
+   //! get a list of atom names and their associated atedrg atom types
+   //!
+   //! @return a list of atom names and their associated atedrg atom types, return an empty list
+   //! on failure (atoms types are not in the dictionary or atom failure to look up the compound id)l
+   std::vector<std::pair<std::string, std::string> > get_acedrg_atom_types(const std::string &compound_id, int imol_enc) const;
+
+   //! get acedrg types for ligand bonds
+   //! @return a `coot::acedrg_types_for_residue_t` - which contains a vector of bond descriptions.
+   coot::acedrg_types_for_residue_t get_acedrg_atom_types_for_ligand(int imol, const std::string &residue_cid) const;
+
    //! write a PNG for the given compound_id. imol can be IMOL_ENC_ANY
    //!
    //! Currently this function does nothing (drawing is done with the not-allowed cairo)
@@ -764,6 +779,7 @@ public:
 
    void export_molecular_represenation_as_gltf(int imol, const std::string &atom_selection_cid,
                                                const std::string &colour_scheme, const std::string &style,
+                                               int secondary_structure_usage_flag,
                                                const std::string &file_name);
 
    //! return the colur table (for testing)
@@ -821,28 +837,47 @@ public:
    void M2T_updateIntParameter(int imol, const std::string &param_name, int value);
 
    //! get ribbon and surface representation
+   //!
+   //! `imol` is the model molecule index
+   //!
+   //! ecid` is the atom selection CID
+   //!
+   //! `colour_scheme` should be one of
+   //!    - "colorRampChainsScheme"
+   //!    - "colorBySecondaryScheme"
+   //!    - "Chain"
+   //!
+   //! `style` should be one of
+   //!    - "Ribbon"
+   //!    - "MolecularSurface"
+   //!
+   //! The `secondary_structure_usage_flag` should  be one of
+   //!   - 0 (USE_HEADER),
+   //!   - 1 (DONT_USE) or
+   //!   - 2 (CALC_SECONDARY_STRUCTURE).
+   //!
+   //! Mode 2 was the (implicit) usage mode until now (20240912).
+   //!
+   //! @return a `coot::simple_mesh_t`
    coot::simple_mesh_t get_molecular_representation_mesh(int imol, const std::string &cid, const std::string &colour_scheme,
-                                                         const std::string &style);
+                                                         const std::string &style, int secondary_structure_usage_flag);
 
    //! get a Gaussian surface representation
    //!
    //! These values seem to give a reasonable quite smooth surface:
+   //!   - `sigma` = 4.4
+   //!   - `contour_level` = 4.0
+   //!   - `box_radius` = 5.0
+   //!   - `grid_scale` = 0.7
+   //!   - `b_factor` = 100.0 (use 0.0 for no FFT-B-factor smoothing)
    //!
-   //! sigma = 4.4
-   //!
-   //! contour_level = 4.0
-   //!
-   //! box_radius = 5.0
-   //!
-   //! grid_scale = 0.7
-   //!
-   //! b_factor = 100.0 (use 0.0 for no FFT-B-factor smoothing)
-   //!
-   //! @return a simple mesh composed of a number of Gaussian surfaces (one for each chain)
+   //! @return a `coot::simple_mesh_t` composed of a number of Gaussian surfaces (one for each chain)
    coot::simple_mesh_t get_gaussian_surface(int imol, float sigma, float contour_level,
                                             float box_radius, float grid_scale, float b_factor) const;
 
    //! get chemical feaatures for the specified residue
+   //!
+   //! @return a `coot::simple_mesh_t`
    coot::simple_mesh_t get_chemical_features_mesh(int imol, const std::string &cid) const;
 
 #ifdef DOXYGEN_SHOULD_PARSE_THIS
@@ -1043,6 +1078,20 @@ public:
    //! @return the index of the new map - or -1 on failure
    int mask_map_by_atom_selection(int imol_coords, int imol_map, const std::string &cid, float atom_radius, bool invert_flag);
 
+   //! Partition the input map. Each voxel in the map is assigned to the chain
+   //! to which it is nearest. Unlike masking, the generated maps are not restricted to be
+   //! "close" to the atoms in the atom selection.
+   //!
+   //! c.f. maskChains for ChimeraX - JiangLab
+   //!
+   //! @return a vector/list of the molecules indices of the newly created maps
+   std::vector<int> partition_map_by_chain(int imol_map, int imol_model);
+
+   //! make a masked map
+   //!
+   //! @return the index of the newly created mask. Return -1 on failure.
+   int make_mask(int imol_map_ref, int imol_model, const std::string &atom_selection_cid, float radius);
+
    //! generate a new map which is the hand-flipped version of the input map.
    //! @return the molecule index of the new map, or -1 on failure.
    int flip_hand(int imol_map);
@@ -1130,11 +1179,13 @@ public:
    coot::molecule_t::rotamer_change_info_t change_to_previous_rotamer(int imol, const std::string &residue_cid, const std::string &alt_conf);
 
    //! change to the first (0th) rotamer
+   //!
+   //! @returns a `coot::molecule_t::rotamer_change_info_t`
    coot::molecule_t::rotamer_change_info_t change_to_first_rotamer(int imol, const std::string &residue_cid, const std::string &alt_conf);
 
    //! delete item
    //!
-   //! where scope is one of the strings: ["ATOM","WATER","RESIDUE","CHAIN","MOLECULE", "LITERAL"]
+   //! where `scope` is one of the strings: ["ATOM","WATER","RESIDUE","CHAIN","MOLECULE", "LITERAL"]
    //! @return 1 on successful modification, return 0 on failure
    std::pair<int, unsigned int> delete_using_cid(int imol, const std::string &cid, const std::string &scope);
 
@@ -1377,10 +1428,12 @@ public:
    //! ``mode`` is one of {SINGLE, TRIPLE, QUINTUPLE, HEPTUPLE, SPHERE, BIG_SPHERE, CHAIN, ALL};
    //! @returns a value of 1 if the refinement was performed and 0 if it was not.
    int refine_residues_using_atom_cid(int imol, const std::string &cid, const std::string &mode, int n_cycles);
+
    //! refine the residues
    //! @returns a value of 1 if the refinement was performed and 0 if it was not.
    int refine_residues(int imol, const std::string &chain_id, int res_no, const std::string &ins_code,
                        const std::string &alt_conf, const std::string &mode, int n_cycles);
+
    //! refine residue range
    //! @returns a value of 1 if the refinement was performed and 0 if it was not.
    int refine_residue_range(int imol, const std::string &chain_id, int res_no_start, int res_no_end, int n_cycles);
@@ -1530,7 +1583,7 @@ public:
    coot::instanced_mesh_t all_molecule_contact_dots(int imol, unsigned int smoothness_factor) const;
 
    //! @return a `simple::molecule_t` for the specified residue.
-   //! this function is not const because we pass a pointer to the protein_geometry geom.
+   //! @note this function is not const because we pass a pointer to the protein_geometry geom.
    coot::simple::molecule_t get_simple_molecule(int imol, const std::string &residue_cid, bool draw_hydrogen_atoms_flag);
 
    //! @return a vector of lines for non-bonded contacts and hydrogen bonds
@@ -1550,16 +1603,22 @@ public:
    //! ligand validation
    //!
    //! @return a vector of interesting geometry
-   void
+   std::vector<coot::geometry_distortion_info_container_t>
    get_ligand_validation_vs_dictionary(int imol, const std::string &ligand_cid, bool include_non_bonded_contacts);
 
    //! match ligand torsions - return the success status
    bool match_ligand_torsions(int imol_ligand, int imol_ref, const std::string &chain_id_ref, int resno_ref);
 
-   //! match ligand positions - return the success status
+   //! match ligand positions
+   //!
+   //! i.e. do a least-squares superposition of the atoms that match in the graphs of the
+   //! two specified ligands - typically one would use this function after matching ligand torsions.
+   //!
+   //! @return the success status
    bool match_ligand_position(int imol_ligand, int imol_ref, const std::string &chain_id_ref, int resno_ref);
 
    //! match ligand torsions and positions
+   //!
    //! @return the success status.
    bool match_ligand_torsions_and_position(int imol_ligand, int imol_ref, const std::string &chain_id_ref, int resno_ref);
 
@@ -1883,7 +1942,10 @@ public:
    // -------------------------------- Others -------------------------------------
    //! \name Other Features
 
-   //! @return a `simple_mesh_t` from the give file.
+   //! Make a m `coot::simple_mesh_t` from a file
+   //!
+   //! @params `file_name` the gltf file
+   //! @return a `simple_mesh_t` from the given file.
    coot::simple_mesh_t make_mesh_from_gltf_file(const std::string &file_name);
 
    //! @params `n_divisions` is a number divisble by 2, at least 4 (typically 16)
@@ -1957,7 +2019,16 @@ public:
    double test_launching_threads(unsigned int n_threads_per_batch, unsigned int n_batches) const;
 
    //! @return time in microsections
-   double test_thread_pool_threads(unsigned int n_threads) const;
+   double test_thread_pool_threads(unsigned int n_threads);
+
+   //! a test for mmdb/gemmi/mmcif functionality
+   //
+   //! @param last_test_only is `true` to mean that only that last test should be run.
+   //! The default is `false`.
+   //! This is useful to set to `true` while a test is being developed.
+   //!
+   //! @return the success status: 1 means that all the tests passed.
+   int mmcif_tests(bool last_test_only);
 
    // get acces to protein geometry
    coot::protein_geometry & get_geometry() {
@@ -1976,7 +2047,8 @@ public:
    void make_mesh_for_molecular_representation_for_blender(int imol,
                                                            const std::string &cid,
                                                            const std::string &colour_scheme,
-                                                           const std::string &style);
+                                                           const std::string &style,
+                                                           int secondary_structure_usage_flag);
    void make_mesh_for_gaussian_surface_for_blender(int imol, float sigma, float contour_level, float box_radius, float grid_scale, float b_factor);
 
    void make_mesh_for_goodsell_style_for_blender(int imol, float colour_wheel_rotation_step,
@@ -1992,8 +2064,11 @@ public:
 #if NB_VERSION_MAJOR
    // skip this (old) block for nanobinds
 #else
+#ifdef DOXYGEN_SHOULD_PARSE_THIS
+#else
    //! \name Old Python functions
 
+   //! old mesh mode: do not use with nanobind
    enum mesh_mode_t { UNKNOWN, SINGLE_COLOUR, MULTI_COLOUR };
    //! old function: do not use with nanobind
    PyObject *simple_mesh_to_pythonic_mesh(const coot::simple_mesh_t &mesh, int mesh_mode);
@@ -2006,11 +2081,11 @@ public:
    //! old function: do not use with nanobind
    PyObject *get_pythonic_molecular_representation_mesh(int imol, const std::string &atom_selection,
                                                         const std::string &colour_sheme,
-                                                        const std::string &style);
+                                                        const std::string &style,
+                                                        int secondary_structure_usage_flag);
    //! old function: do not use with nanobind get Gaussion surface mesh
    PyObject *get_pythonic_gaussian_surface_mesh(int imol, float sigma, float contour_level,
                                                 float box_radius, float grid_scale, float fft_b_factor);
-
    //! old function: do not use with nanobind: get a pythonic mesh of the molecule (bonds)
    //!
    //! @return a pair - the first of which (index 0) is the list of atoms, the second (index 1) is the list of bonds.
@@ -2029,6 +2104,7 @@ public:
    //! make a "proper" simple  molecule python class one day.
    PyObject *get_pythonic_simple_molecule(int imol, const std::string &cid, bool include_hydrogen_atoms_flag);
 
+#endif
 #endif
 #endif
 

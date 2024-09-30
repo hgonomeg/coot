@@ -597,6 +597,9 @@ namespace coot {
       // returns either the specified residue or null if not found
       mmdb::Residue *get_residue(const residue_spec_t &residue_spec) const;
 
+      // can return null
+      mmdb::Residue *get_residue(const std::string &residue_cid) const;
+
       std::string get_residue_name(const residue_spec_t &residue_spec) const;
 
       bool have_unsaved_changes() const { return modification_info.have_unsaved_changes(); }
@@ -734,7 +737,8 @@ namespace coot {
 
       simple_mesh_t get_molecular_representation_mesh(const std::string &cid,
                                                       const std::string &colour_scheme,
-                                                      const std::string &style) const;
+                                                      const std::string &style,
+                                                      int secondaryStructureUsageFlag) const;
 
       simple_mesh_t get_gaussian_surface(float sigma, float contour_level,
                                          float box_radius, float grid_scale, float fft_b_factor) const;
@@ -769,6 +773,7 @@ namespace coot {
       void export_molecular_represenation_as_gltf(const std::string &atom_selection_cid,
                                                   const std::string &colour_scheme,
                                                   const std::string &style,
+                                                  int secondary_structure_usage_flag,
                                                   const std::string &file_name);
 
       void set_show_symmetry(bool f) { show_symmetry = f;}
@@ -825,7 +830,7 @@ namespace coot {
                                                                        ctpl::thread_pool &static_thread_pool);
 
       // this function is another version of the above function, but returns distortion values
-      void
+      std::vector<coot::geometry_distortion_info_container_t>
       geometric_distortions_from_mol(const std::string &ligand_cid, bool with_nbcs,
                                      coot::protein_geometry &geom,
                                      ctpl::thread_pool &static_thread_pool);
@@ -1335,7 +1340,8 @@ namespace coot {
 
       void make_mesh_for_molecular_representation_for_blender(const std::string &cid,
                                                               const std::string &colour_scheme,
-                                                              const std::string &style);
+                                                              const std::string &style,
+                                                              int secondary_structure_usage_flag);
 
       void make_mesh_for_goodsell_style_for_blender(protein_geometry *geom_p,
                                                     float colour_wheel_rotation_step,

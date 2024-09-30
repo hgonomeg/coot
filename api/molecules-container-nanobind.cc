@@ -6,14 +6,15 @@
 #include <nanobind/ndarray.h>
 #include <nanobind/operators.h>
 
-#include "molecules-container.hh"
-#include "mini-mol/mini-mol-utils.hh"
-
 #include "clipper/core/ramachandran.h"
 #include "clipper/clipper-ccp4.h"
 
-#include "coot-utils/g_triangle.hh"
 #include "coords/mmdb-crystal.h"
+#include "coot-utils/acedrg-types-for-residue.hh"
+#include "coot-utils/g_triangle.hh"
+#include "mini-mol/mini-mol-utils.hh"
+#include "molecules-container.hh"
+
 
 namespace nb = nanobind;
 
@@ -242,6 +243,7 @@ NB_MODULE(chapi, m) {
     .def("find_water_baddies",&molecules_container_t::find_water_baddies)
     .def("file_name_to_string",&molecules_container_t::file_name_to_string)
     .def("fill_partial_residue",&molecules_container_t::fill_partial_residue)
+    .def("fill_partial_residues",&molecules_container_t::fill_partial_residues)
     .def("fill_rotamer_probability_tables",&molecules_container_t::fill_rotamer_probability_tables)
     .def("fit_ligand",&molecules_container_t::fit_ligand)
     .def("fit_ligand_right_here",&molecules_container_t::fit_ligand_right_here)
@@ -255,6 +257,8 @@ NB_MODULE(chapi, m) {
     .def("generate_self_restraints",&molecules_container_t::generate_self_restraints)
     .def("geometry_init_standard",&molecules_container_t::geometry_init_standard)
     .def("get_active_atom",&molecules_container_t::get_active_atom)
+    .def("get_acedrg_atom_types",&molecules_container_t::get_acedrg_atom_types)
+    .def("get_acedrg_atom_types_for_ligand",&molecules_container_t::get_acedrg_atom_types_for_ligand)
     .def("get_atom",&molecules_container_t::get_atom, nb::rv_policy::reference)
     .def("get_atom_using_cid",&molecules_container_t::get_atom_using_cid, nb::rv_policy::reference)
     .def("get_bonds_mesh",&molecules_container_t::get_bonds_mesh)
@@ -320,15 +324,17 @@ NB_MODULE(chapi, m) {
     .def("is_valid_model_molecule",&molecules_container_t::is_valid_model_molecule)
     .def("jed_flip",      nb::overload_cast<int, const std::string&, bool> (&molecules_container_t::jed_flip))
     .def("lsq_superpose", &molecules_container_t::lsq_superpose)
-    .def("make_power_scaled_map", &molecules_container_t::make_power_scaled_map)
+    .def("make_mask", &molecules_container_t::make_mask)
     .def("make_mesh_for_bonds_for_blender", &molecules_container_t::make_mesh_for_bonds_for_blender)
     .def("make_mesh_for_gaussian_surface_for_blender", &molecules_container_t::make_mesh_for_gaussian_surface_for_blender)
     .def("make_mesh_for_goodsell_style_for_blender", &molecules_container_t::make_mesh_for_goodsell_style_for_blender)
     .def("make_mesh_for_map_contours_for_blender", &molecules_container_t::make_mesh_for_map_contours_for_blender)
     .def("make_mesh_for_molecular_representation_for_blender", &molecules_container_t::make_mesh_for_molecular_representation_for_blender)
     .def("mask_map_by_atom_selection",&molecules_container_t::mask_map_by_atom_selection)
+    .def("make_power_scaled_map", &molecules_container_t::make_power_scaled_map)
     .def("merge_molecules", nb::overload_cast<int,const std::string &>(&molecules_container_t::merge_molecules))
     .def("minimize_energy",&molecules_container_t::minimize_energy)
+    .def("mmcif_tests",&molecules_container_t::mmcif_tests)
     .def("mmrrcc",&molecules_container_t::mmrrcc)
     .def("move_molecule_to_new_centre",&molecules_container_t::move_molecule_to_new_centre)
     .def("multiply_residue_temperature_factors",&molecules_container_t::multiply_residue_temperature_factors)
@@ -336,6 +342,7 @@ NB_MODULE(chapi, m) {
     .def("new_positions_for_atoms_in_residues",&molecules_container_t::new_positions_for_atoms_in_residues)
     .def("new_positions_for_residue_atoms",&molecules_container_t::new_positions_for_residue_atoms)
     .def("non_standard_residue_types_in_model",&molecules_container_t::non_standard_residue_types_in_model)
+    .def("partition_map_by_chain",&molecules_container_t::partition_map_by_chain)
     .def("pepflips_using_difference_map",&molecules_container_t::pepflips_using_difference_map)
     .def("peptide_omega_analysis",&molecules_container_t::peptide_omega_analysis)
     .def("print_secondary_structure_info",&molecules_container_t::print_secondary_structure_info)
@@ -373,7 +380,7 @@ NB_MODULE(chapi, m) {
     .def("set_molecule_name",&molecules_container_t::set_molecule_name)
     .def("set_rama_plot_restraints_weight",&molecules_container_t::set_rama_plot_restraints_weight)
     .def("set_refinement_is_verbose",&molecules_container_t::set_refinement_is_verbose)
-    .def("set_refinement_is_verbose",&molecules_container_t::set_refinement_is_verbose)
+    .def("set_refinement_geman_mcclure_alpha",&molecules_container_t::set_refinement_geman_mcclure_alpha)
     .def("set_show_timings",&molecules_container_t::set_show_timings)
     .def("set_torsion_restraints_weight",&molecules_container_t::set_torsion_restraints_weight)
     .def("set_use_gemmi",&molecules_container_t::set_use_gemmi)
@@ -551,6 +558,16 @@ NB_MODULE(chapi, m) {
     nb::class_<coot::instanced_mesh_t>(m,"instanced_mesh_t")
     .def_ro("geom",   &coot::instanced_mesh_t::geom)
     .def_ro("markup", &coot::instanced_mesh_t::markup)
+    ;
+    nb::class_<coot::acedrg_types_for_bond_t>(m,"acedrg_types_for_bond_t")
+       .def_ro("atom_id_1",   &coot::acedrg_types_for_bond_t::atom_id_1)
+       .def_ro("atom_id_2",   &coot::acedrg_types_for_bond_t::atom_id_2)
+       .def_ro("atom_type_1", &coot::acedrg_types_for_bond_t::atom_type_1)
+       .def_ro("atom_type_2", &coot::acedrg_types_for_bond_t::atom_type_2)
+       .def_ro("bond_length", &coot::acedrg_types_for_bond_t::bond_length)
+    ;
+    nb::class_<coot::acedrg_types_for_residue_t>(m,"acedrg_types_for_residue_t")
+        .def_ro("bond_types", &coot::acedrg_types_for_residue_t::bond_types)
     ;
     nb::class_<coot::util::phi_psi_t>(m,"phi_psi_t")
     .def("phi",               &coot::util::phi_psi_t::phi)

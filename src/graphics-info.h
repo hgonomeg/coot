@@ -4082,7 +4082,8 @@ public:
    int add_molecular_representation(int imol,
                                     const std::string &atom_selection,
 				    const std::string &colour_scheme,
-				    const std::string &style);
+				    const std::string &style,
+                                    int secondary_structure_usage_flag);
    int add_ribbon_representation_with_user_defined_colours(int imol, const std::string &name);
    void remove_molecular_representation(int imol, int idx);
 
@@ -4678,6 +4679,7 @@ string   static std::string sessionid;
    static double mouse_y;
    static double drag_begin_x; // gtk pixels
    static double drag_begin_y;
+   static double mouse_speed; // default 1.0, but adjusted to be bigger for wide display
    static std::pair<double, double> mouse_previous_position;
    static void set_mouse_previous_position(double x, double y) { mouse_previous_position.first = x; mouse_previous_position.second = y; }
    static double get_mouse_previous_position_x() { return mouse_previous_position.first; }
@@ -5424,6 +5426,10 @@ string   static std::string sessionid;
 
    static bool curmudgeon_mode; // default false, particles and faces
    static bool use_sounds; // default true
+
+   static std::vector<std::pair<std::string, clipper::Xmap<float> > > map_partition_results;
+   static int map_partition_results_state;
+   static std::string map_partition_results_state_string; // "Done A Chain" etc.
 
    // add a pumpkin as a graphics object and draw it.
    void pumpkin();

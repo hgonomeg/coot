@@ -49,12 +49,13 @@ int headless_mode(RuntimeOpts& opts) {
     }
     auto mol_shptr = std::shared_ptr<RDKit::RWMol>(molecule);
     CootLigandEditorCanvas* canvas = coot_ligand_editor_canvas_new();
-    // todo: center the molecule here
     if(coot_ligand_editor_canvas_append_molecule(canvas, std::move(mol_shptr)) == -1) {
         std::cerr << "coot_ligand_editor_canvas_append_molecule() returned -1: The molecule could not be appended to the canvas.";
         g_object_ref_sink(canvas);
         return 2;
     }
+    // todo: center the molecule here
+    
     std::cout << "TODO: Headless mode \n";
     // todo: parse export mode
     // todo: width and height

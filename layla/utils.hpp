@@ -22,6 +22,7 @@
 #ifndef LAYLA_UTILS_HPP
 #define LAYLA_UTILS_HPP
 #include <rdkit/GraphMol/RWMol.h>
+#include <optional>
 #include "ligand_editor_canvas.hpp"
 
 namespace coot::layla {
@@ -32,6 +33,8 @@ enum class ExportMode: unsigned char {
     PNG,
     SVG
 };
+
+std::optional<ExportMode> parse_export_mode(const std::string& mode);
 
 // The path string has to be copied anyway (for mutability)
 void export_with_cairo(CootLigandEditorCanvas* canvas, std::string path, ExportMode mode, int width, int height);

@@ -30,6 +30,8 @@
 #include <cairo/cairo-pdf.h>
 #include <cairo/cairo-svg.h>
 #include "ligand_editor_canvas.hpp"
+#include <algorithm>
+#include <cctype>
 
 void coot::layla::remove_non_polar_hydrogens(RDKit::RWMol& mol) {
     std::vector<RDKit::Atom*> atoms_to_be_removed;
@@ -54,6 +56,25 @@ void coot::layla::remove_non_polar_hydrogens(RDKit::RWMol& mol) {
             g_warning("Could not sanitize molecule while removing non-polar hydrogens: %s", e.what());
         }
     }
+}
+
+std::optional<coot::layla::ExportMode> coot::layla::parse_export_mode(const std::string& mode) {
+    std::string mode_lowercase = mode;
+    std::transform(mode.begin(), mode.end(), mode_lowercase.begin(),
+        [](unsigned char c){ return std::tolower(c); }
+    );
+    
+    // g_warning("lwrc: len=%zu %s", mode_lowercase.size(), mode_lowercase.c_str());
+
+    if(mode_lowercase == "svg") {
+        return ExportMode::SVG;
+    } else if(mode_lowercase == "png") {
+        return ExportMode::PNG;
+    } else if(mode_lowercase == "pdf") {
+        return ExportMode::PDF;
+    }
+
+    return std::nullopt;
 }
 
 void coot::layla::export_with_cairo(CootLigandEditorCanvas* canvas, std::string path, ExportMode mode, int width, int height) {

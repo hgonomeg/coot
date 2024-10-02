@@ -37,29 +37,34 @@ struct RuntimeOpts {
     std::optional<std::string> smiles_input;
     std::string output_format;
     std::optional<std::string> output_file;
+    unsigned int width, height;
 };
 
 
 
 int headless_mode(RuntimeOpts& opts) {
+    auto format_opt = coot::layla::parse_export_mode(opts.output_format);
+    if(!format_opt) {
+        std::cerr << "Could not parse output format. See --help for a list of available options.";
+        return 1;
+    }
+    coot::layla::ExportMode emode = *format_opt;
+
     RDKit::RWMol* molecule = RDKit::SmilesToMol(*opts.smiles_input, 0, false);
     if(!molecule) {
         std::cerr << "RDKit::RWMol* is a nullptr. The SMILES code from commandline options is probably invalid.";
-        return 1;
+        return 2;
     }
     auto mol_shptr = std::shared_ptr<RDKit::RWMol>(molecule);
     CootLigandEditorCanvas* canvas = coot_ligand_editor_canvas_new();
+    gtk_widget_set_size_request(GTK_WIDGET(canvas),  opts.width, opts.height);
     if(coot_ligand_editor_canvas_append_molecule(canvas, std::move(mol_shptr)) == -1) {
         std::cerr << "coot_ligand_editor_canvas_append_molecule() returned -1: The molecule could not be appended to the canvas.";
         g_object_ref_sink(canvas);
-        return 2;
+        return 3;
     }
-    // todo: center the molecule here
-    
-    std::cout << "TODO: Headless mode \n";
-    // todo: parse export mode
-    // todo: width and height
-    coot::layla::export_with_cairo(canvas, *opts.output_file, coot::layla::ExportMode::SVG, 640, 480);
+    // todo: find a way to center molecule
+    coot::layla::export_with_cairo(canvas, *opts.output_file, emode, opts.width, opts.height);
     g_object_ref_sink(canvas);
     return 0;
 }
@@ -72,8 +77,10 @@ int main(int argc, char** argv) {
     desc.add_options()
         ("help,h", "Show help")
         ("smiles,s", po::value<std::string>()->value_name("SMILES"),                       "Input SMILES string")
-        ("format,f", po::value<std::string>()->value_name("FORMAT")->default_value("svg"), "Output format for headless image generation")
+        ("format,f", po::value<std::string>()->value_name("FORMAT")->default_value("svg"), "Output format for headless image generation [svg | png | pdf]")
         ("output,o", po::value<std::string>()->value_name("OUTPUT_FILE"),                  "Output file for headless image generation")
+        ("width",  po::value<unsigned int>()->value_name("WIDTH")->default_value(1024),  "Width of output image")
+        ("height", po::value<unsigned int>()->value_name("HEIGHT")->default_value(1024), "Height of output image")
     ;
 
     po::positional_options_description pos_opt;
@@ -100,6 +107,14 @@ int main(int argc, char** argv) {
 
     if(vm.count("output")) {
         runtime_opts.output_file = vm["output"].as<std::string>();
+    }
+
+    if(vm.count("width")) {
+        runtime_opts.width = vm["width"].as<unsigned int>();
+    }
+
+    if(vm.count("height")) {
+        runtime_opts.height = vm["height"].as<unsigned int>();
     }
 
     // Unfortunately, we have to do that here even though we're not using GUI for headless mode.

@@ -47,6 +47,10 @@ unsigned int lhasa::append_from_smiles(CootLigandEditorCanvas& canvas, std::stri
     return canvas.append_molecule(rdkit_mol_from_smiles(smiles));
 }
 
+unsigned int lhasa::append_from_smiles_at_coords(CootLigandEditorCanvas& canvas, std::string smiles, int x, int y) {
+    return canvas.append_molecule_at_coords(rdkit_mol_from_smiles(smiles), x, y);
+}
+
 unsigned int lhasa::append_from_pickle_base64(CootLigandEditorCanvas& canvas, std::string base64_pickle_string) {
     std::string pickle_string = moorhen_base64::base64_decode(base64_pickle_string);
     auto appendee = rdkit_mol_from_pickle(pickle_string);

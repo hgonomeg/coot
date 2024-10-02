@@ -23,12 +23,12 @@
 #include <rdkit/GraphMol/MolOps.h>
 #ifndef __EMSCRIPTEN__
 #include <glib-2.0/glib.h>
-#else
-#include "../lhasa/glog_replacement.hpp"
-#endif
 #include <cairo.h>
 #include <cairo/cairo-pdf.h>
 #include <cairo/cairo-svg.h>
+#else
+#include "../lhasa/glog_replacement.hpp"
+#endif
 #include "ligand_editor_canvas.hpp"
 #include <algorithm>
 #include <cctype>
@@ -77,6 +77,7 @@ std::optional<coot::layla::ExportMode> coot::layla::parse_export_mode(const std:
     return std::nullopt;
 }
 
+#ifndef __EMSCRIPTEN__
 void coot::layla::export_with_cairo(CootLigandEditorCanvas* canvas, std::string path, ExportMode mode, int width, int height) {
     cairo_surface_t* target = nullptr;
     auto draw = [&](){
@@ -125,3 +126,4 @@ void coot::layla::export_with_cairo(CootLigandEditorCanvas* canvas, std::string 
         cairo_surface_destroy(target);
     }
 }
+#endif

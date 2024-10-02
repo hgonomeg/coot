@@ -36,8 +36,10 @@ enum class ExportMode: unsigned char {
 
 std::optional<ExportMode> parse_export_mode(const std::string& mode);
 
+#ifndef __EMSCRIPTEN__
 // The path string has to be copied anyway (for mutability)
 void export_with_cairo(CootLigandEditorCanvas* canvas, std::string path, ExportMode mode, int width, int height);
+#endif
 
 void remove_non_polar_hydrogens(RDKit::RWMol& mol);
 

@@ -57,13 +57,13 @@ int headless_mode(RuntimeOpts& opts) {
     }
     auto mol_shptr = std::shared_ptr<RDKit::RWMol>(molecule);
     CootLigandEditorCanvas* canvas = coot_ligand_editor_canvas_new();
-    gtk_widget_set_size_request(GTK_WIDGET(canvas),  opts.width, opts.height);
-    if(coot_ligand_editor_canvas_append_molecule(canvas, std::move(mol_shptr)) == -1) {
+    //does not fix centering
+    //gtk_widget_set_size_request(GTK_WIDGET(canvas),  opts.width, opts.height);
+    if(coot_ligand_editor_canvas_append_molecule_at_coords(canvas, std::move(mol_shptr), opts.width / 2.0, opts.height / 2.0) == -1) {
         std::cerr << "coot_ligand_editor_canvas_append_molecule() returned -1: The molecule could not be appended to the canvas.";
         g_object_ref_sink(canvas);
         return 3;
     }
-    // todo: find a way to center molecule
     coot::layla::export_with_cairo(canvas, *opts.output_file, emode, opts.width, opts.height);
     g_object_ref_sink(canvas);
     return 0;

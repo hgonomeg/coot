@@ -43,6 +43,7 @@ EMSCRIPTEN_BINDINGS(lhasa) {
   // TODO: RDKit typedefinitions
   // function("remove_non_polar_hydrogens", &coot::layla::remove_non_polar_hydrogens);
   function("append_from_smiles", &lhasa::append_from_smiles);
+  function("append_from_smiles_at_coords", &lhasa::append_from_smiles_at_coords);
   function("append_from_pickle_base64", &lhasa::append_from_pickle_base64);
   // TODO: RDKit typedefinitions
   // function("rdkit_mol_from_smiles", &lhasa::rdkit_mol_from_smiles);
@@ -230,6 +231,7 @@ EMSCRIPTEN_BINDINGS(lhasa) {
     .function("set_active_tool", &CootLigandEditorCanvas::set_active_tool)
     // TODO: RDKit typedefinitions
     // .function("append_molecule", &CootLigandEditorCanvas::append_molecule)
+    // .function("append_molecule_at_coords", &CootLigandEditorCanvas::append_molecule_at_coords)
     .function("update_molecule_from_smiles", &CootLigandEditorCanvas::update_molecule_from_smiles)
     .function("set_scale", &CootLigandEditorCanvas::set_scale)
     .function("get_scale", &CootLigandEditorCanvas::get_scale)

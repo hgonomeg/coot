@@ -36,6 +36,8 @@ std::unique_ptr<RDKit::RWMol> rdkit_mol_from_pickle(std::string pickle_string);
 std::string rdkit_mol_to_smiles(RDKit::ROMol& mol);
 
 unsigned int append_from_smiles(CootLigandEditorCanvas& canvas, std::string smiles);
+unsigned int append_from_smiles_at_coords(CootLigandEditorCanvas& canvas, std::string smiles, int x, int y);
+
 unsigned int append_from_pickle_base64(CootLigandEditorCanvas& canvas, std::string pickle_string);
 
 std::unique_ptr<coot::ligand_editor_canvas::ActiveTool> make_active_tool(emscripten::val t);

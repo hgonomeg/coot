@@ -566,6 +566,18 @@ void coot_ligand_editor_canvas_set_active_tool(CootLigandEditorCanvas* self, std
 }
 
 int coot_ligand_editor_canvas_append_molecule(CootLigandEditorCanvas* self, std::shared_ptr<RDKit::RWMol> rdkit_mol) noexcept {
+    #ifndef __EMSCRIPTEN__
+    int x = gtk_widget_get_size(GTK_WIDGET(self), GTK_ORIENTATION_HORIZONTAL) / 2.0;
+    int y = gtk_widget_get_size(GTK_WIDGET(self), GTK_ORIENTATION_VERTICAL) / 2.0;
+    #else
+    int x = self->measure(CootLigandEditorCanvas::MeasurementDirection::HORIZONTAL).requested_size / 2.0;
+    int y = self->measure(CootLigandEditorCanvas::MeasurementDirection::VERTICAL).requested_size / 2.0;
+    #endif
+    return coot_ligand_editor_canvas_append_molecule_at_coords(self, std::move(rdkit_mol), x, y);
+}
+
+
+int coot_ligand_editor_canvas_append_molecule_at_coords(CootLigandEditorCanvas* self, std::shared_ptr<RDKit::RWMol> rdkit_mol, int x, int y) noexcept {
     if(rdkit_mol->getNumAtoms() == 0) {
         self->update_status("Attempted to add an empty molecule!");
         g_warning("Attempted to add an empty molecule!");
@@ -577,17 +589,7 @@ int coot_ligand_editor_canvas_append_molecule(CootLigandEditorCanvas* self, std:
         self->begin_edition();
         self->molecules->push_back(CanvasMolecule(rdkit_mol, self->allow_invalid_molecules));
         self->molecules->back()->set_canvas_scale(self->scale);
-        #ifndef __EMSCRIPTEN__
-        self->molecules->back()->apply_canvas_translation(
-            gtk_widget_get_size(GTK_WIDGET(self), GTK_ORIENTATION_HORIZONTAL) / 2.0, 
-            gtk_widget_get_size(GTK_WIDGET(self), GTK_ORIENTATION_VERTICAL) / 2.0
-        );
-        #else
-        self->molecules->back()->apply_canvas_translation(
-            self->measure(CootLigandEditorCanvas::MeasurementDirection::HORIZONTAL).requested_size / 2.0, 
-            self->measure(CootLigandEditorCanvas::MeasurementDirection::VERTICAL).requested_size / 2.0
-        );
-        #endif
+        self->molecules->back()->apply_canvas_translation(x, y);
         self->rdkit_molecules->push_back(std::move(rdkit_mol));
         self->finalize_edition();
         // Already called by finalize_edition()

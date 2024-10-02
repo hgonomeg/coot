@@ -56,7 +56,6 @@ int headless_mode(RuntimeOpts& opts) {
         return 2;
     }
     std::cout << "TODO: Headless mode \n";
-    // todo: unify export at state.cpp
     // todo: parse export mode
     // todo: width and height
     coot::layla::export_with_cairo(canvas, *opts.output_file, coot::layla::ExportMode::SVG, 640, 480);

@@ -33,6 +33,7 @@ enum class ExportMode: unsigned char {
     SVG
 };
 
+// The path string has to be copied anyway (for mutability)
 void export_with_cairo(CootLigandEditorCanvas* canvas, std::string path, ExportMode mode, int width, int height);
 
 void remove_non_polar_hydrogens(RDKit::RWMol& mol);

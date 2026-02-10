@@ -11295,6 +11295,21 @@ l              <object class="GtkComboBox" id="ramachandran_plot_molecule_choose
             </child>
           </object>
         </child>
+        <child>
+          <object class="GtkSeparator">
+            <property name="margin-top">5</property>
+            <property name="margin-bottom">5</property>
+            <property name="margin-start">2</property>
+            <property name="margin-end">2</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkCheckButton" id="validation_graph_docked_checkbutton">
+            <property name="label">Docked</property>
+            <property name="active">True</property>
+            <signal name="toggled" handler="on_validation_graph_docked_checkbutton_toggled"></signal>
+          </object>
+        </child>
       </object>
     </child>
   </object>

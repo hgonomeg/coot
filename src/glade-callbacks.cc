@@ -6815,6 +6815,12 @@ on_density_correlation_graph_toggled(GtkCheckButton* self, gpointer user_data) {
 
 extern "C" G_MODULE_EXPORT
 void
+on_validation_graph_docked_checkbutton_toggled(GtkCheckButton* self, gpointer user_data) {
+   graphics_info_t::validation_graphs_is_docked = gtk_check_button_get_active(self);
+}
+
+extern "C" G_MODULE_EXPORT
+void
 on_ramachandran_plot_molecule_chooser_ok_button_clicked(GtkButton       *button,
                                                         gpointer         user_data) {
 

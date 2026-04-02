@@ -24,8 +24,6 @@ find_package(GSL REQUIRED)
 find_package(PNG REQUIRED)
 find_package(GEMMI REQUIRED)
 find_package(Threads REQUIRED)
-find_package(Python REQUIRED)
-
 find_package(Boost COMPONENTS iostreams regex thread serialization REQUIRED)
 find_package(glm REQUIRED)
 
@@ -52,6 +50,16 @@ if (WIN32)
    string(REPLACE "\\" "/" Python_SITEARCH "${Python_SITEARCH}")
    string(REPLACE "\\" "/" Python_SITELIB  "${Python_SITELIB}")
 endif(WIN32)
+
+# Determine the install destination for Python files.
+# - If the user set CMAKE_INSTALL_PREFIX explicitly, install relative to it.
+# - Otherwise (default /usr/local), install directly to Python_SITELIB so that
+#   venv builds land inside the venv rather than in /usr/local.
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(Python_SITELIB_REL "${Python_SITELIB}")
+else()
+  set(Python_SITELIB_REL "lib/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}/site-packages")
+endif()
 
 
 set(coot_src ${CMAKE_CURRENT_SOURCE_DIR})
@@ -508,10 +516,11 @@ if (MAKE_COOT_HEADLESS_API_PYI)
   # thanks Jordan (install coot_headless_api.pyi in the right place)
   nanobind_add_stub(coot_headless_api_ext_stub
     MODULE coot_headless_api
-    OUTPUT ${Python_SITELIB}/coot_headless_api.pyi
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/coot_headless_api.pyi
     PYTHON_PATH $<TARGET_FILE_DIR:coot_headless_api>
     DEPENDS coot_headless_api
   )
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/coot_headless_api.pyi DESTINATION ${Python_SITELIB_REL})
   # MARKER_FILE py.typed
 endif()
 
@@ -664,7 +673,7 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/monomers DESTINATION share/coot/lib/data
         FILES_MATCHING PATTERN "*" PATTERN "*Makefile.*" EXCLUDE)
 
 # Thanks Charles B.
-install(TARGETS coot_headless_api DESTINATION ${Python_SITELIB})
+install(TARGETS coot_headless_api DESTINATION ${Python_SITELIB_REL})
 
 install(TARGETS coot_headless_api DESTINATION lib)
 

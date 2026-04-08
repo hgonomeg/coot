@@ -79,7 +79,7 @@ graphics_info_t::save_preference_file(const std::string &filename, short int il)
 
       int preference_type = g.preferences_internal[i].preference_type;
 
-      std::cout << "preference_type: " << preference_type << std::endl;
+      // std::cout << "preference_type: " << preference_type << std::endl;
 
       switch (preference_type) {
 
@@ -127,7 +127,7 @@ graphics_info_t::save_preference_file(const std::string &filename, short int il)
          break;
 
       case PREFERENCES_VIEW_ROTATION_MOUSE_BUTTON:
-         commands.push_back(state_command("coot", "set-use-primary-mouse-button-for-rotation",
+         commands.push_back(state_command("coot", "set-use-primary-mouse-button-for-view-rotation",
                                           g.preferences_internal[i].ivalue1, il));
          break;
 
@@ -155,7 +155,7 @@ graphics_info_t::save_preference_file(const std::string &filename, short int il)
          commands.push_back(state_command("coot", "set-map-radius",
                                           g.preferences_internal[i].fvalue1, il));
          break;
-       
+
       case PREFERENCES_MAP_ISOLEVEL_INCREMENT:
          commands.push_back(state_command("coot", "set-iso-level-increment",
                                           g.preferences_internal[i].fvalue1, il, v));
@@ -178,7 +178,7 @@ graphics_info_t::save_preference_file(const std::string &filename, short int il)
             commands.push_back(state_command("coot", "set-dynamic-map-sampling-off", il));
          }
          break;
-      
+
       case PREFERENCES_DYNAMIC_MAP_SIZE_DISPLAY:
          if (g.preferences_internal[i].ivalue1 == 1) {
             commands.push_back(state_command("coot", "set-dynamic-map-size-display-on", il));
@@ -217,12 +217,12 @@ graphics_info_t::save_preference_file(const std::string &filename, short int il)
                                           g.preferences_internal[i].ivalue1, il));
          break;
 
-      case PREFERENCES_MARK_CIS_BAD:
-         commands.push_back(state_command("coot", "set-mark-cis-peptides-as-bad",
-                                          g.preferences_internal[i].ivalue1, il));     
-         break;
+      // case PREFERENCES_MARK_CIS_BAD:
+      //    commands.push_back(state_command("coot", "set-mark-cis-peptides-as-bad",
+      //                                     g.preferences_internal[i].ivalue1, il));
+      //    break;
 
-      case PREFERENCES_BG_COLOUR:      
+      case PREFERENCES_BG_COLOUR:
          fval1 = g.preferences_internal[i].fvalue1;  // red
          fval2 = g.preferences_internal[i].fvalue2;  // green
          fval3 = g.preferences_internal[i].fvalue3;  // blue
@@ -327,17 +327,6 @@ graphics_info_t::make_preferences_internal() {
   p.ivalue1 = on;
   ret.push_back(p);
  
-  // dialogs
-  on = accept_reject_dialog_docked_state();
-  p.preference_type = PREFERENCES_ACCEPT_DIALOG_DOCKED;
-  p.ivalue1 = on;
-  ret.push_back(p);
-
-  on = accept_reject_dialog_docked_show_state();
-  p.preference_type = PREFERENCES_ACCEPT_DIALOG_DOCKED_SHOW;
-  p.ivalue1 = on;
-  ret.push_back(p);
-
   on = refinement_immediate_replacement_state();
   p.preference_type = PREFERENCES_IMMEDIATE_REPLACEMENT;
   p.ivalue1 = on;
@@ -517,15 +506,15 @@ graphics_info_t::make_preferences_internal() {
 
   // Geometry preference settings
   // Cis peptides
-  on = show_mark_cis_peptides_as_bad_state();
-  p.preference_type = PREFERENCES_MARK_CIS_BAD;
-  p.ivalue1 = on;
-  ret.push_back(p);
+  // on = show_mark_cis_peptides_as_bad_state();
+  // p.preference_type = PREFERENCES_MARK_CIS_BAD;
+  // p.ivalue1 = on;
+  // ret.push_back(p);
 
   p.preference_type = PREFERENCES_DEFAULT_B_FACTOR;
   p.fvalue1 = default_new_atoms_b_factor;
   ret.push_back(p);
-  
+
   // Colour preference settings
   // Background colour
   p.preference_type = PREFERENCES_BG_COLOUR;
@@ -580,7 +569,7 @@ graphics_info_t::make_preferences_internal() {
   ret.push_back(p);
 
   // Pink pointer size
-  fvalue = graphics_info_t::rotation_centre_cube_size;
+  fvalue = graphics_info_t::user_defined_rotation_centre_crosshairs_size_scale_factor;
   p.preference_type = PREFERENCES_PINK_POINTER;
   p.fvalue1 = fvalue;
   ret.push_back(p);

@@ -24,6 +24,9 @@
  *
  */
 
+#include <filesystem>
+#include "coords/Cartesian.hh"
+#include "glib.h"
 #ifdef USE_PYTHON
 #include <Python.h>
 #endif
@@ -31,6 +34,10 @@
 #include "cc-interface.hh"
 
 #include "coot-utils/coot-map-utils.hh"
+
+#include "c-interface-generic-objects.h"
+#include "utils/logging.hh"
+extern logging logger;
 
 
 /* ------------------------------------------------------------------------- */
@@ -46,13 +53,11 @@ void undisplay_all_maps_except(int imol_map) {
       if (g.is_valid_map_molecule(i)) {
          if (i == imol_map) {
             g.molecules[i].set_map_is_displayed(true); // just a state change
-            if (g.display_control_window())
-               set_display_control_button_state(i, "Displayed", true);
+            set_display_control_button_state(i, "Displayed", true);
          } else {
             if (g.molecules[i].is_displayed_p()) {
                g.molecules[i].set_map_is_displayed(false);
-               if (g.display_control_window())
-                  set_display_control_button_state(i, "Displayed", false);
+               set_display_control_button_state(i, "Displayed", false);
             }
          }
       }
@@ -81,7 +86,8 @@ handle_read_ccp4_map(const std::string &filename, int is_diff_map_flag) {
 	 g.activate_scroll_radio_button_in_display_manager(imol_new);
       } else {
 	 g.erase_last_molecule();
-	 std::cout << "Read map " << filename << " failed" << std::endl;
+	 // std::cout << "Read map " << filename << " failed" << std::endl;
+         logger.log(log_t::INFO, "Read of map", filename, "failed");
 	 std::string s = "Read map ";
 	 s += filename;
 	 s += " failed.";
@@ -153,7 +159,7 @@ map_to_model_correlation_stats_per_residue_range_py(int imol, const std::string 
       count++;
    }
    count = 0;
-   for (it=m.first.begin(); it!=m.first.end(); ++it) {
+   for (it=m.second.begin(); it!=m.second.end(); ++it) {
       const coot::residue_spec_t &spec(it->first);
       const coot::util::density_correlation_stats_info_t &stats(it->second);
       PyObject *spec_py = residue_spec_to_py(spec);
@@ -344,7 +350,7 @@ void servalcat_refine(int imol_model,
    auto check_it = +[] (gpointer data) {
 
       graphics_info_t g;
-      std::cout << "............... running servalcat_refine() check_it() " << g.servalcat_fofc.first << std::endl;
+      std::cout << "debug:: running servalcat_refine() check_it() " << g.servalcat_fofc.first << std::endl;
 
       if (g.servalcat_refine.first) {
          const std::string &pdb_file_name = g.servalcat_refine.second;
@@ -377,7 +383,6 @@ void servalcat_refine(int imol_model,
       std::string n = g.molecules[imol_model].Refmac_name_stub();
       std::string prefix_dir = std::string("servalcat-refine-") + n;
       std::string prefix = (xdg.get_data_home() / prefix_dir).string();
-      std::cout << "!!!!!!!!!!!!!!!!!!! prefix: " << prefix << std::endl;
       std::string pdb_file_name = prefix + "_input.pdb";
       g.molecules[imol_model].write_pdb_file(pdb_file_name);
       std::thread thread(servalcat_refine_func, half_map_1, half_map_2, mask_map, pdb_file_name, prefix, resolution);
@@ -389,3 +394,482 @@ void servalcat_refine(int imol_model,
    }
 
 }
+
+#include "c-interface-python.hh" // because we use display_python().
+#include "python-3-interface.hh"
+
+void add_toolbar_subprocess_button(const std::string &button_label,
+                                   const std::string &subprocess_command,
+                                   PyObject *arg_list,
+                                   PyObject *on_completion_function, // should these be strings?
+                                   PyObject *on_completion_args) {
+
+   auto type_check = [] (PyObject *obj) {
+
+      if (obj == nullptr) {
+         return "NULL";
+      }
+
+      PyTypeObject* type = obj->ob_type;
+      if (type == &PyLong_Type) {
+         return "int"; // Python 3 integers are longs
+      } else if (type == &PyFloat_Type) {
+         return "float";
+      } else if (type == &PyUnicode_Type) {
+         return "str"; // Python 3 strings are unicode
+      } else if (type == &PyBool_Type) {
+         return "bool";
+      } else if (type == &PyList_Type) {
+         return "list";
+      } else if (type == &PyTuple_Type) {
+         return "tuple";
+      } else if (type == &PyDict_Type) {
+         return "dict";
+      // I don't know what to do about Py_None
+      // } else if (type == &PyNone_Type) {
+      //    return "NoneType";
+      } else if (type == &PyBytes_Type) {
+         return "bytes";
+      } else if (type == &PyByteArray_Type) {
+         return "bytearray";
+      } else {
+         return type->tp_name; // Fallback to the type's name
+      }
+   };
+
+   struct py_transfer_t {
+      PyObject *on_completion_function;
+      PyObject *on_completion_args;
+      std::vector<std::string> cmd_list;
+      bool termination_condtion;
+   };
+
+   if (PyList_Check(arg_list)) {
+      unsigned int l1 = PyObject_Length(arg_list);
+      std::vector<std::string> args;
+      for (unsigned int i=0; i<l1; i++) {
+         PyObject *o = PyList_GetItem(arg_list, i);
+         if (PyUnicode_Check(o)) {
+            std::string s = PyBytes_AS_STRING(PyUnicode_AsUTF8String(o));
+            args.push_back(s);
+         }
+      }
+
+      auto on_button_clicked = +[] (GtkButton *button, gpointer data) {
+
+         auto my_subproc = [] (const std::vector<std::string> &cmd_list, py_transfer_t *pt) {
+            try {
+               subprocess::OutBuffer obuf = subprocess::check_output(cmd_list);
+               if (true) {
+                  std::cout << "Data : " << obuf.buf.data() << std::endl;
+                  std::cout << "Data len: " << obuf.length << std::endl;
+                  pt->termination_condtion = true;
+               }
+            }
+            catch (...) {
+               std::cout << "WARNING:: add_toolbar_subprocess_button() my_subproc() caught some error" << std::endl;
+            }
+         };
+
+         auto check_it = +[] (gpointer data) {
+
+            py_transfer_t *pt = reinterpret_cast<py_transfer_t *>(data);
+            // std::cout << "check_it: " << pt->termination_condtion << std::endl;
+            if (pt->termination_condtion) {
+               PyObject *return_val = nullptr;
+#if 0 // check version of python here - less than 3.13 is my guess
+               return_val = PyEval_CallObject(pt->on_completion_function, pt->on_completion_args);
+#endif
+               std::cout << "DEBUG:: return_val " << return_val << std::endl;
+               PyObject *error_thing = PyErr_Occurred();
+               if (! error_thing) {
+                  // std::cout << "INFO:: check_it() No Python error on callable check" << std::endl;
+                  logger.log(log_t::INFO, "check_it() No Python error on callable check");
+               } else {
+                  std::cout << "ERROR:: while executing check_it() a python error occured " << std::endl;
+                  PyObject *type, *value, *traceback;
+                  PyErr_Fetch(&type, &value, &traceback);
+                  PyErr_NormalizeException(&type, &value, &traceback);
+                  PyObject *exception_string = PyObject_Repr(value);
+                  const char *em = myPyString_AsString(exception_string);
+                  std::cout << "ERROR:: " << em << std::endl;
+                  Py_XDECREF(value);
+                  Py_XDECREF(traceback);
+                  Py_XDECREF(type);
+               }
+
+               if (return_val) {
+                  PyObject *dp = display_python(return_val);
+                  std::cout << "DEBUG:: return val as string: " << PyBytes_AS_STRING(PyUnicode_AsUTF8String(dp)) << std::endl;
+               }
+               graphics_info_t g;
+               g.graphics_draw();
+               return gboolean(FALSE);
+            } else {
+               return gboolean(TRUE);
+            }
+         };
+
+         py_transfer_t *pt = reinterpret_cast<py_transfer_t *>(data);
+         std::vector<std::string> command_list = pt->cmd_list;
+         std::thread thread(my_subproc, command_list, pt);
+         thread.detach();
+         GSourceFunc f = GSourceFunc(check_it);
+         g_timeout_add(400, f, pt);
+
+      };
+
+      int tuple_state = PyTuple_Check(on_completion_args);
+      int unicode_state = PyUnicode_Check(on_completion_args);
+      std::cout << "debug:: on_completion_args tuple-state: " << tuple_state << std::endl;
+      std::cout << "debug:: on_completion_args unicode-state: " << unicode_state << std::endl;
+
+      if (on_completion_args) {
+         PyObject *dp = display_python(on_completion_args);
+         if (dp)
+            std::cout << "DEBUG:: on_completion_args: " << PyUnicode_AsUTF8String(dp) << std::endl;
+         else
+            std::cout << "DEBUG:: on_completion_args display_python null " << std::endl;
+         PyObject *error_thing = PyErr_Occurred();
+         if (! error_thing) {
+            // std::cout << "INFO:: check_it() No Python error on printing on_completion_args" << std::endl;
+            logger.log(log_t::INFO, "check_it() No Python error on printing on_completion_args");
+         } else {
+            std::cout << "ERROR:: while pringing on_completion_args a python error occured " << std::endl;
+            PyObject *type, *value, *traceback;
+            PyErr_Fetch(&type, &value, &traceback);
+            PyErr_NormalizeException(&type, &value, &traceback);
+            PyObject *exception_string = PyObject_Repr(value);
+            const char *em = myPyString_AsString(exception_string);
+            std::cout << "ERROR:: " << em << std::endl;
+            Py_XDECREF(value);
+            Py_XDECREF(traceback);
+            Py_XDECREF(type);
+         }
+      }
+
+      std::string oca_type = type_check(on_completion_args);
+      std::cout << "oca_type " << oca_type << std::endl;
+
+      py_transfer_t *py_transfer_p = new py_transfer_t;
+      py_transfer_p->on_completion_function = on_completion_function;
+      py_transfer_p->on_completion_args     = on_completion_args;
+      py_transfer_p->cmd_list = args;
+      py_transfer_p->cmd_list.insert(py_transfer_p->cmd_list.begin(), subprocess_command);
+      py_transfer_p->termination_condtion = false;
+
+      GtkWidget *button = gtk_button_new_with_label(button_label.c_str());
+      g_signal_connect(G_OBJECT(button), "clicked", G_CALLBACK(on_button_clicked), py_transfer_p);
+      GtkWidget *toolbar = widget_from_builder("main_toolbar");
+      GtkWidget *toolbar_hbox = widget_from_builder("main_window_toolbar_hbox");
+      gtk_box_append(GTK_BOX(toolbar_hbox), button);
+
+   }
+
+}
+
+#include "c-interface.h" // for is_valid_model_molecule()))
+
+// resolution in A.
+// The map in imol_fofc_map gets overwritten.
+void emplacement_local(int imol_model,
+                       const std::string &half_map_1, const std::string &half_map_2,
+                       int search_centre_x,
+                       int search_centre_y,
+                       int search_centre_z,
+                       float resolution) {
+
+   // this doesn't actually work yet. It is a placeholder to be fixed up later.
+
+   auto emplace_local_func = [] (const std::vector<std::string> &cmd_list ) {
+
+      try {
+         subprocess::OutBuffer obuf = subprocess::check_output(cmd_list);
+         if (true) {
+            std::cout << "Data : " << obuf.buf.data() << std::endl;
+            std::cout << "Data len: " << obuf.length << std::endl;
+         }
+      }
+      catch (const std::runtime_error &e) {
+         std::cout << "WARNING:: runtime_error " << e.what() << std::endl;
+      }
+      catch (const std::exception &e) {
+         std::cout << "WARNING:: exception " << e.what() << std::endl;
+      }
+      catch (...) {
+         std::cout << "WARNING:: caught some other error" << std::endl;
+      }
+   };
+
+   auto check_it = +[] (gpointer data) {
+      std::cout << "checking..." << std::endl;
+   };
+
+   if (is_valid_model_molecule(imol_model)) {
+      char *ccp4_ev = getenv("CCP4");
+      std::string model_file_name = "emplace_local_in.pdb";
+      write_pdb_file(imol_model, model_file_name.c_str());
+      if (ccp4_ev) {
+         std::string ccp4_prfx(ccp4_ev);
+         std::string em_placement_py_file = ccp4_prfx + "/ccp4-9/lib/python3.9/site-packages" +
+            "/phaser_voyager/src/New_Voyager/scripts/emplace_local.py";
+         std::vector<std::string> command_list = {
+            "ccp4-python",
+            em_placement_py_file,
+            "--model_file",
+            model_file_name,
+            "--map1", half_map_1,
+            "--map2", half_map_2,
+            "--d_min", std::to_string(resolution),
+            "--sphere_center",
+            std::to_string(search_centre_x),
+            std::to_string(search_centre_y),
+            std::to_string(search_centre_z)
+         };
+
+         std::thread thread(emplace_local_func, command_list);
+         thread.detach();
+
+         GSourceFunc f = GSourceFunc(check_it);
+         g_timeout_add(400, f, nullptr);
+
+      }
+   }
+
+}
+
+
+// in c-interface-gui.cc
+// fill_combobox_with_map_options(combobox_1, callback);
+// but not in a header
+int fill_combobox_with_map_options(GtkWidget *combobox, GCallback signalfunc);
+
+void show_map_partition_by_chain_dialog() {
+
+   GtkWidget *dialog = widget_from_builder("map_partition_by_chain_dialog");
+
+   // fill map partion dialog
+   GtkWidget *combobox_1 = widget_from_builder("map_partition_by_chain_map_combobox");
+   GtkWidget *combobox_2 = widget_from_builder("map_partition_by_chain_model_combobox");
+
+   int imol_active = 0;
+   std::pair<bool, std::pair<int, coot::atom_spec_t> > active_atom = graphics_info_t::active_atom_spec();
+   if (active_atom.first)
+      imol_active = active_atom.second.first;
+
+   GCallback callback = G_CALLBACK(nullptr);
+   graphics_info_t g;
+   g.new_fill_combobox_with_coordinates_options(combobox_2, callback, imol_active);
+
+   // in c-interface-gui.cc
+   fill_combobox_with_map_options(combobox_1, callback);
+
+   gtk_widget_set_visible(dialog, TRUE);
+
+}
+
+// use this for interactive
+void map_partition_by_chain_threaded(int imol_map, int imol_model) {
+
+   auto map_partition_func = [] (const clipper::Xmap<float> &xmap, mmdb::Manager *mol) {
+
+      std::string &state_string = graphics_info_t::map_partition_results_state_string;
+      graphics_info_t::map_partition_results_state = 1;
+      graphics_info_t::map_partition_results = coot::util::partition_map_by_chain(xmap, mol, &state_string);
+      graphics_info_t::map_partition_results_state = 0;
+   };
+
+   auto check_map_partition_results = +[] (gpointer data) {
+
+      bool keep_going = TRUE;
+      int imol_map = GPOINTER_TO_INT(data);
+      // std::cout << "checking...  " << graphics_info_t::map_partition_results_state << std::endl;
+      GtkWidget *label = widget_from_builder("partition_map_by_chain_status_label");
+      if (label) {
+         gtk_widget_set_visible(label, TRUE);
+         gtk_label_set_text(GTK_LABEL(label), graphics_info_t::map_partition_results_state_string.c_str());
+      }
+      if (graphics_info_t::map_partition_results_state == 1) {
+         // keep going
+      } else {
+         if (! graphics_info_t::map_partition_results.empty()) {
+            bool is_em_map = graphics_info_t::molecules[imol_map].is_EM_map();
+            for (const auto &mi : graphics_info_t::map_partition_results) {
+               std::string chain_id = mi.first;
+               int imol_for_map = graphics_info_t::create_molecule();
+               std::string label = "Partitioned map Chain " + chain_id;
+               graphics_info_t::molecules[imol_for_map].install_new_map(mi.second, label, is_em_map);
+            }
+            // Let's just check that the user didn't delete the original map in the meantime...
+            if (graphics_info_t::is_valid_map_molecule(imol_map))
+               graphics_info_t::molecules[imol_map].set_map_is_displayed(false);
+
+            if (label) {
+               gtk_label_set_text(GTK_LABEL(label), "");
+               gtk_widget_set_visible(label, FALSE);
+            }
+
+            keep_going = FALSE; // turn off the timeout
+
+            graphics_info_t::graphics_draw();
+         }
+      }
+      return keep_going;
+   };
+
+   std::vector<int> v;
+   graphics_info_t g;
+   if (g.is_valid_model_molecule(imol_model)) {
+      if (g.is_valid_map_molecule(imol_map)) {
+         const clipper::Xmap<float> &xmap = graphics_info_t::molecules[imol_map].xmap;
+         mmdb::Manager *mol = graphics_info_t::molecules[imol_model].atom_sel.mol;
+         std::thread t(map_partition_func, xmap, mol);
+         t.detach();
+         GSourceFunc cb = GSourceFunc(check_map_partition_results);
+         g_timeout_add(1000, cb, GINT_TO_POINTER(imol_map));
+      }
+   }
+}
+
+// use this version for scripting
+std::vector<int> map_partition_by_chain(int imol_map, int imol_model) {
+
+   std::vector<int> v;
+   graphics_info_t g;
+   if (g.is_valid_model_molecule(imol_model)) {
+      if (g.is_valid_map_molecule(imol_map)) {
+         const clipper::Xmap<float> &xmap = graphics_info_t::molecules[imol_map].xmap;
+         mmdb::Manager *mol = graphics_info_t::molecules[imol_model].atom_sel.mol;
+         std::string info_string;
+         std::vector<std::pair<std::string, clipper::Xmap<float> > > maps_info =
+            coot::util::partition_map_by_chain(xmap, mol, &info_string);
+         if (! maps_info.empty()) {
+            for (const auto &mi : maps_info) {
+               std::string chain_id = mi.first;
+               int imol_for_map = g.create_molecule();
+               std::string label = "Partioned map Chain " + chain_id;
+               bool is_em_map = g.molecules[imol_map].is_EM_map();
+               g.molecules[imol_for_map].install_new_map(mi.second, label, is_em_map);
+               v.push_back(imol_for_map);
+            }
+            g.molecules[imol_map].set_map_is_displayed(false);
+         }
+      }
+   }
+   g.graphics_draw();
+   return v;
+}
+
+
+std::filesystem::path plain_path(const std::string &fp_in) {
+
+   std::string fp = fp_in;
+   std::string::size_type pos = 0;
+   while ((pos = fp.find('$', pos)) != std::string::npos) {
+      auto end = pos + 1;
+      while (end < fp.size() && (std::isalnum(fp[end]) || fp[end] == '_'))
+         end++;
+      std::string var_name = fp.substr(pos + 1, end - pos - 1);
+      const char *val = getenv(var_name.c_str());
+      if (val) {
+         fp.replace(pos, end - pos, val);
+         pos += std::strlen(val);
+      } else {
+         pos = end;
+      }
+   }
+   return std::filesystem::path(fp);
+}
+
+int phaser_emplacement_status = 0;
+
+// returns immediately after spawning sub-thread
+//
+void emplacement_by_phaser(const std::string &half_map_1_file_name, const std::string &half_map_2_file_name,
+                           coot::Cartesian search_centre, int imol_model, float radius) {
+
+   // spawn a sub-process and timeout function to watch when the sub-process fineshes.
+
+   struct em_placement_data_t {
+      std::string em_placement_output_file_name;
+      int obj; // the generic object sphere index
+   };
+
+   auto check_it = +[] (gpointer user_data) {
+
+      em_placement_data_t *empd = static_cast<em_placement_data_t *>(user_data);
+
+      if (phaser_emplacement_status == 0) {
+         if (std::filesystem::exists(empd->em_placement_output_file_name)) {
+            read_coordinates(empd->em_placement_output_file_name);
+            set_display_generic_object(empd->obj, 0);
+         } else {
+            std::cout << "DEBUG:: subprocess finished but output file " << empd->em_placement_output_file_name
+                      << " does not exist" << std::endl;
+         }
+         return (gboolean)G_SOURCE_REMOVE;
+      } else {
+         return (gboolean)G_SOURCE_CONTINUE;
+      }
+   };
+
+
+
+   auto run_subprocess = [] (const std::string &half_map_1_file_name, const std::string &half_map_2_file_name,
+                             const std::string &model_file_name, coot::Cartesian sphere_center) {
+
+      // e.g. phenix.python $phenix/lib/python3.9/site-packages/New_Voyager/scripts/emplace_local.py \
+      // --map1 emd_32143_half_map_1.map --map2 emd_32143_half_map_2.map \
+      // --d_min 3.0 --model_file test-frag-nano.pdb \
+      // --sphere_center 123 69 111
+
+      // std::filesystem::path script_dir = "/Users/pemsley/Applications/phenix-2.0-5936/lib/python3.9/site-packages/New_Voyager/scripts";
+      std::filesystem::path script_dir = plain_path("$PHENIX/lib/$PHENIX_PYTHON_VERSION/site-packages/New_Voyager/scripts");
+      std::filesystem::path py_file_path = script_dir / "emplace_local.py";
+      std::cout << "DEBUG:: py_file_path " << py_file_path << std::endl;
+      std::string reso_str = "3.4";
+      std::string cs1 = std::to_string(sphere_center.x());
+      std::string cs2 = std::to_string(sphere_center.y());
+      std::string cs3 = std::to_string(sphere_center.z());
+      std::vector<std::string> cmd_list = { "phenix.python", py_file_path.string(),
+                                            "--map1", half_map_1_file_name, "--map2", half_map_2_file_name,
+                                            "--d_min", reso_str,
+                                            "--model_file", model_file_name,
+                                            "--sphere_center", cs1, cs2, cs3};
+
+      if (true) {
+         for (const auto &s : cmd_list) std::cout << s << " ";
+         std::cout << "\n";
+      }
+      try {
+         phaser_emplacement_status = 1;
+         subprocess::OutBuffer obuf = subprocess::check_output(cmd_list);
+         phaser_emplacement_status = 0;
+      }
+      catch (const subprocess::CalledProcessError &e) {
+         std::cout << "WARNING::" << e.what() << std::endl;
+         phaser_emplacement_status = 0;
+      }
+   };
+
+   phaser_emplacement_status = 1;
+   std::string em_placement_output_file_name = "top_sol_1.pdb";
+   if (std::filesystem::exists(em_placement_output_file_name)) {
+      std::string new_file_name = em_placement_output_file_name + ".backup";
+      rename(em_placement_output_file_name.c_str(), new_file_name.c_str());
+   }
+   if (std::filesystem::exists(em_placement_output_file_name)) {
+      std::cout << "WARNING:: " << em_placement_output_file_name << " exists and can't be moved"<< std::endl;
+   } else {
+      if (is_valid_model_molecule(imol_model)) {
+         em_placement_data_t *data_p = new em_placement_data_t(em_placement_output_file_name);
+         std::string model_file_name = "input-model-for-emplacement.pdb";
+         write_pdb_file(imol_model, model_file_name.c_str());
+         std::thread thread(run_subprocess, half_map_1_file_name, half_map_2_file_name, model_file_name, search_centre);
+         phaser_emplacement_status = 1;
+         thread.detach();
+         g_timeout_add(500, GSourceFunc(check_it), data_p);
+      }
+   }
+}
+

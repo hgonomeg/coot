@@ -30,6 +30,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <tuple>
 
 class DiscreteSegment;
 class DisplayPrimitive;
@@ -37,6 +38,8 @@ class ObjectSelection;
 class DishyBaseContainer_t;
 
 #include "mmdb2/mmdb_manager.h"
+
+enum SecondaryStructureUsageType { USE_HEADER_INFO, DONT_USE, CALC_SECONDARY_STRUCTURE };
 
 typedef struct _PdbCoords {
     float xyz[4];
@@ -56,20 +59,21 @@ class MyMolecule {
 private:
     bool doDraw;
     bool ownsMMDB;
-    int loadFromPDB(const char *filepath);
-    int processCoords();
+    std::map<std::tuple<std::string, int, std::string>, std::tuple<float, float, float>> residueRadii;
+    int loadFromPDB(const char *filepath, int secondaryStructureUsageFlag);
+    int processCoords(int secondaryStructureUsageFlag);
 public:
     mmdb::Manager *mmdb;
 	std::string PDBCode;
     MyMolecule();
-    MyMolecule(const char *filePath);
-    MyMolecule(std::string filePathString);
-    MyMolecule(mmdb::Manager *fromMMDBManager) : doDraw(true), mmdb(fromMMDBManager) {
+    MyMolecule(const char *filePath, int secondaryStructureUsageFlag);
+    MyMolecule(std::string filePathString, int secondaryStructureUsageFlag);
+    MyMolecule(mmdb::Manager *fromMMDBManager, int secondaryStructureUsageFlag) : doDraw(true), mmdb(fromMMDBManager) {
         ownsMMDB = false;
-        processCoords();
+        processCoords(secondaryStructureUsageFlag);
     };
     ~MyMolecule();
-    int loadCoords( char *fileData, int length);
+    int loadCoords( char *fileData, int length, int secondaryStructureUsageFlag);
     int identifySegments(std::vector<DiscreteSegment *> &segments, int selHnd);
     int identifyDishyBases(std::map<mmdb::Chain *, DishyBaseContainer_t> &dishy_bases_chain_map, int selHnd);
     int identifyBonds();
@@ -93,14 +97,18 @@ public:
     };
     int FormatPDBCard (AtomCard theAtom, char *card,int count);
     void writePDB(const std::string &filePath);
-    static std::shared_ptr<MyMolecule> create(std::string(filePathString)){
-        auto newMolecule = new MyMolecule(filePathString);
+    void setResidueRadii(const std::map<std::tuple<std::string, int, std::string>, std::tuple<float, float, float>> &radii);
+    std::tuple<float, float, float> getRadiiForResidue(mmdb::Residue *res) const;
+    static std::shared_ptr<MyMolecule> create(std::string(filePathString), int secondaryStructureUsageFlag){
+        auto newMolecule = new MyMolecule(filePathString, secondaryStructureUsageFlag);
         std::cout << newMolecule;
         return std::shared_ptr<MyMolecule>(newMolecule);
     };
     static std::shared_ptr<MyMolecule> createFromString(std::string(contentsAsString)){
         auto newMolecule = new MyMolecule();
-        newMolecule->loadCoords(&(contentsAsString[0]), contentsAsString.size());
+        //20240912-PE maybe the secondary structure usage status should be passed to this function
+        // (I don't know what this function is or if it is used)
+        newMolecule->loadCoords(&(contentsAsString[0]), contentsAsString.size(), CALC_SECONDARY_STRUCTURE);
         return std::shared_ptr<MyMolecule>(newMolecule);
     };
 

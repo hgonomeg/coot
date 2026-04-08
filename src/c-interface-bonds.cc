@@ -38,17 +38,14 @@
 // #include <algorithm>
 
 #include <mmdb2/mmdb_manager.h>
-#include "coords/mmdb-extras.h"
+#include "coords/mmdb-extras.hh"
 #include "coords/mmdb.hh"
-
-#include "coords/mmdb-crystal.h"
-
-#include "coords/Cartesian.h"
-#include "coords/Bond_lines.h"
+#include "coords/mmdb-crystal.hh"
+#include "coords/Cartesian.hh"
+#include "coords/Bond_lines.hh"
+#include "coot-utils/coot-coord-utils.hh"
 
 #include "graphics-info.h"
-
-#include "coot-utils/coot-coord-utils.hh"
 
 #include "c-interface.h"
 // #include "c-interface-gtk-widgets.h"
@@ -213,7 +210,7 @@ void calculate_hydrogen_bonds(int imol) {
       int sel_1 = graphics_info_t::molecules[imol].atom_sel.SelectionHandle;
       int sel_2 = graphics_info_t::molecules[imol].atom_sel.SelectionHandle;
       const coot::protein_geometry &geom(*graphics_info_t::Geom_p());
-      std::vector<coot::h_bond> h_bonds = hbs.get(sel_1, sel_2, mol, geom);
+      std::vector<coot::h_bond> h_bonds = hbs.get(sel_1, sel_2, mol, geom, imol);
 
       std::cout << "INFO:: Found " << h_bonds.size() << " hydrogen bonds " << std::endl;
 
@@ -245,3 +242,4 @@ void calculate_hydrogen_bonds(int imol) {
 
    }
 }
+

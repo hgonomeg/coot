@@ -45,7 +45,7 @@ MyMolecule::~MyMolecule(){
     if (ownsMMDB) delete mmdb;
 };
 
-int MyMolecule::loadCoords( char *data, int length)
+int MyMolecule::loadCoords( char *data, int length, int secondaryStructureUsageFlag)
 {
     Delimiters delimiters("\n\r");
     TokenIterator<char*, Delimiters> charIter(data, data + length, delimiters), end2;
@@ -109,27 +109,122 @@ int MyMolecule::loadCoords( char *data, int length)
             int RC = mmdb->PutPDBString ( formattedCard );
         }
     }
-    return processCoords();
+    return processCoords(secondaryStructureUsageFlag);
 }
 
-int MyMolecule::processCoords(){
-    //mmdb->Cryst.CalcCoordTransforms();
-    identifyBonds();
-    CXXUtils::assignUnitedAtomRadius(mmdb);
-    int nModels = mmdb->GetNumberOfModels();
-    for (int iModel = 1; iModel <= nModels; iModel++){
-        mmdb::Model *model = mmdb->GetModel(iModel);
+void
+secondary_structure_header_to_residue_sse(mmdb::Manager *mol) {
+
+   // add the SSE atribute for residue of the mol, extracted
+   // from the HELIX and SHEET records
+
+   for(int imod = 1; imod<=mol->GetNumberOfModels(); imod++) {
+      mmdb::Model *model_p = mol->GetModel(imod);
+      if (model_p) {
+         int n_sheets  = model_p->GetNumberOfSheets();
+         int n_helices = model_p->GetNumberOfHelices();
+
+         for (int ih=1; ih<=n_helices; ih++) {
+            mmdb:: Helix *helix_p = model_p->GetHelix(ih);
+            if (helix_p) {
+               std::string chain_id = helix_p->initChainID;
+
+               int n_chains = model_p->GetNumberOfChains();
+               for (int ichain=0; ichain<n_chains; ichain++) {
+                  mmdb::Chain *chain_p = model_p->GetChain(ichain);
+                  if (chain_p) {
+                     std::string this_chain_id = chain_p->GetChainID();
+                     if (this_chain_id == chain_id) {
+                        int start_res_no = helix_p->initSeqNum;
+                        int   end_res_no = helix_p->endSeqNum;
+                        int n_res = chain_p->GetNumberOfResidues();
+                        for (int ires=0; ires<n_res; ires++) {
+                           mmdb::Residue *residue_p = chain_p->GetResidue(ires);
+                           if (residue_p) {
+                              if (residue_p->GetSeqNum() >= start_res_no) {
+                                 if (residue_p->GetSeqNum() <= end_res_no) {
+                                    residue_p->SSE = mmdb::SSE_Helix;
+                                 }
+                              }
+                           }
+                        }
+                     }
+                  }
+               }
+            }
+         }
+
+         for (int isheet=1; isheet<=n_sheets; isheet++) {
+            mmdb::Sheet *sheet_p = model_p->GetSheet(isheet);
+            if (sheet_p) {
+               int n_strands = model_p->GetNumberOfStrands(isheet);
+               for (int istrand=1; istrand<=n_strands; istrand++) {
+                  mmdb::Strand *strand_p = model_p->GetStrand(isheet, istrand);
+                  if (strand_p) {
+                     std::string chain_id = strand_p->initChainID;
+                     int start_res_no = strand_p->initSeqNum;
+                     int   end_res_no = strand_p->endSeqNum;
+                     int n_chains = model_p->GetNumberOfChains();
+                     for (int ichain=0; ichain<n_chains; ichain++) {
+                        mmdb::Chain *chain_p = model_p->GetChain(ichain);
+                        if (chain_p) {
+                           std::string this_chain_id = chain_p->GetChainID();
+                           if (this_chain_id == chain_id) {
+                              int n_res = chain_p->GetNumberOfResidues();
+                              for (int ires=0; ires<n_res; ires++) {
+                                 mmdb::Residue *residue_p = chain_p->GetResidue(ires);
+                                 if (residue_p) {
+                                    if (residue_p->GetSeqNum() >= start_res_no) {
+                                       if (residue_p->GetSeqNum() <= end_res_no) {
+                                          residue_p->SSE = mmdb::SSE_Strand;
+                                       }
+                                    }
+                                 }
+                              }
+                           }
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      }
+   }
+}
+
+
+int MyMolecule::processCoords(int secondaryStructureUsageFlag){
+
+   bool calc_secondary_structure = false;
+   bool transfer_secondary_structure = false;
+   if (secondaryStructureUsageFlag == CALC_SECONDARY_STRUCTURE)
+      calc_secondary_structure = true;
+   if (secondaryStructureUsageFlag == USE_HEADER_INFO)
+      transfer_secondary_structure = true;
+
+   //mmdb->Cryst.CalcCoordTransforms();
+   identifyBonds();
+   CXXUtils::assignUnitedAtomRadius(mmdb);
+
+   if (calc_secondary_structure) {
+      int nModels = mmdb->GetNumberOfModels();
+      for (int iModel = 1; iModel <= nModels; iModel++){
+         mmdb::Model *model = mmdb->GetModel(iModel);
         model->CalcSecStructure(true);
-    }
-    
-    return 0;
+      }
+   }
+
+   if (transfer_secondary_structure)
+      secondary_structure_header_to_residue_sse(mmdb);
+
+   return 0;
 }
 
-int MyMolecule::loadFromPDB(const char *filePath){
+int MyMolecule::loadFromPDB(const char *filePath, int secondaryStructureUsageFlag){
     int RC;
     mmdb::InitMatType();
     mmdb = new mmdb::Manager();
-    
+
     //Now read the MMDB for purpose of calculating surface
     mmdb->SetFlag( mmdb::MMDBF_PrintCIFWarnings );
     RC = mmdb->ReadCoorFile (filePath);
@@ -139,19 +234,19 @@ int MyMolecule::loadFromPDB(const char *filePath){
         filePath << endl;
     }
     else {
-        std::cout << processCoords();
+        std::cout << processCoords(secondaryStructureUsageFlag);
     }
     return RC;
 }
 
-MyMolecule::MyMolecule(const char *filePath) : MyMolecule()
+MyMolecule::MyMolecule(const char *filePath, int secondaryStructureUsageFlag) : MyMolecule()
 {
-    int RC = loadFromPDB(filePath);
+    int RC = loadFromPDB(filePath, secondaryStructureUsageFlag);
 }
 
-MyMolecule::MyMolecule(std::string filePathString) : MyMolecule()
+MyMolecule::MyMolecule(std::string filePathString, int secondaryStructureUsageFlag) : MyMolecule()
 {
-    int RC = loadFromPDB(filePathString.c_str());
+    int RC = loadFromPDB(filePathString.c_str(), secondaryStructureUsageFlag);
 }
 
 int MyMolecule::FormatPDBCard (AtomCard theAtom, char *card,int count){
@@ -175,41 +270,41 @@ int MyMolecule::FormatPDBCard (AtomCard theAtom, char *card,int count){
 
 int MyMolecule::identifySegments(std::vector<DiscreteSegment *> &segments, int selHnd)
 {
-    
-    bool do_dishy_bases = true; // I don't know where this goes - it's a user setting
-    // this is where they go if they were calculated
-    std::map<mmdb::Chain *, DishyBaseContainer_t> dishy_bases_chain_map;
-    
+
     int nModels = mmdb->GetNumberOfModels();
     // std::cout << "debug:: identifySegments(): Protein consists of " << nModels << " Models\n";
-    mmdb::Model* model = mmdb->GetModel(1);
-    
-    //Here is an approach for (bloomin) segIDs....repeat the segment determination for each segID
-    // simples :-)
-    
-    std::set<std::string> segIDs;
-    
-    {
-        // Establish a list of segIDs
-        int nAtoms = model->GetNumberOfAtoms(false);
-        mmdb::Atom** atoms = model->GetAllAtoms();
-        
-        for (int iAtom = 0; iAtom < nAtoms; iAtom++){
-            segIDs.insert(std::string(atoms[iAtom]->segID));
-        }
-    }
-    // std::cout << "debug:: identifySegments(): there are " << segIDs.size() << " segIDs\n";
 
-    std::set<std::string>::iterator segIDIter = segIDs.begin();
-    for (;segIDIter != segIDs.end(); ++segIDIter){
-        int          nChains;
-        mmdb::Chain**     chains;
-        model->GetChainTable(chains, nChains);
-        // std::cout << "debug:: identifySegments(): Model 1 consists of " << nChains << " Chains\n";
-        //Pass through and identify any chain breaks
-        for (int iChain = 0; iChain < nChains; iChain ++){
-           mmdb::Chain* chain = model->GetChain(iChain);
-           FCXXCoord lastCoord (-1e30, -1e30, -1e30);
+    // Loop over all models (important for NMR structures with multiple models)
+    for (int iModel = 1; iModel <= nModels; iModel++) {
+        mmdb::Model* model = mmdb->GetModel(iModel);
+        if (!model) continue;
+
+        //Here is an approach for (bloomin) segIDs....repeat the segment determination for each segID
+        // simples :-)
+
+        std::set<std::string> segIDs;
+
+        {
+            // Establish a list of segIDs
+            int nAtoms = model->GetNumberOfAtoms(false);
+            mmdb::Atom** atoms = model->GetAllAtoms();
+
+            for (int iAtom = 0; iAtom < nAtoms; iAtom++){
+                segIDs.insert(std::string(atoms[iAtom]->segID));
+            }
+        }
+        // std::cout << "debug:: identifySegments(): there are " << segIDs.size() << " segIDs\n";
+
+        std::set<std::string>::iterator segIDIter = segIDs.begin();
+        for (;segIDIter != segIDs.end(); ++segIDIter){
+            int          nChains;
+            mmdb::Chain**     chains;
+            model->GetChainTable(chains, nChains);
+            // std::cout << "debug:: identifySegments(): Model " << iModel << " consists of " << nChains << " Chains\n";
+            //Pass through and identify any chain breaks
+            for (int iChain = 0; iChain < nChains; iChain ++){
+               mmdb::Chain* chain = model->GetChain(iChain);
+               FCXXCoord lastCoord (-1e30, -1e30, -1e30);
            int nResidues;
            mmdb::Residue**   residues;
            chain->GetResidueTable(residues, nResidues);
@@ -243,11 +338,13 @@ int MyMolecule::identifySegments(std::vector<DiscreteSegment *> &segments, int s
                                         if (distance > 4.1){
                                             // std::cout << "New chain start "<< calpha->GetResName() << calpha->GetSeqNum () << calpha->segID << "\n";
                                             DiscreteSegment *segment = new DiscreteSegment();
-                                            segment->addCalpha(calpha);
+                                            auto [ax, ay, az] = getRadiiForResidue(calpha->GetResidue());
+                                            segment->addCalpha(calpha, ax, ay, az);
                                             segments.push_back(segment);
                                         }
                                         else {
-                                            segments.back()->addCalpha(calpha);
+                                            auto [ax, ay, az] = getRadiiForResidue(calpha->GetResidue());
+                                            segments.back()->addCalpha(calpha, ax, ay, az);
                                         }
                                         lastCoord = calphaPosition;
                                     }
@@ -285,10 +382,12 @@ int MyMolecule::identifySegments(std::vector<DiscreteSegment *> &segments, int s
                                                 // std::cout << "New chain nucleotide start "<< atom_p->GetResName() << " "
                                                 // << atom_p->GetSeqNum () << atom_p->GetChainID() << "\n";
                                                 DiscreteSegment *segment = new DiscreteSegment();
-                                                segment->addCalpha(atom_p);
+                                                auto [ax, ay, az] = getRadiiForResidue(residue_p);
+                                                segment->addCalpha(atom_p, ax, ay, az);
                                                 segments.push_back(segment);
                                             } else {
-                                                segments.back()->addCalpha(atom_p);
+                                                auto [ax, ay, az] = getRadiiForResidue(residue_p);
+                                                segments.back()->addCalpha(atom_p, ax, ay, az);
                                             }
                                             lastCoord = atom_pos;
                                         }
@@ -301,6 +400,7 @@ int MyMolecule::identifySegments(std::vector<DiscreteSegment *> &segments, int s
             }
         }
     }
+    } // end loop over models
     return 0;
 }
 
@@ -308,33 +408,37 @@ int MyMolecule::identifyDishyBases(std::map<mmdb::Chain *, DishyBaseContainer_t>
 {
     int nModels = mmdb->GetNumberOfModels();
     // std::cout << "debug:: identifyDishyBases(): Protein consists of " << nModels << " Models\n";
-    mmdb::Model* model = mmdb->GetModel(1);
-    
-    //Here is an approach for (bloomin) segIDs....repeat the segment determination for each segID
-    // simples :-)
-    
-    std::set<std::string> segIDs;
-    
-    {
-        // Establish a list of segIDs
-        int nAtoms = model->GetNumberOfAtoms(false);
-        mmdb::Atom** atoms = model->GetAllAtoms();
-        
-        for (int iAtom = 0; iAtom < nAtoms; iAtom++){
-            segIDs.insert(std::string(atoms[iAtom]->segID));
+
+    // Loop over all models (important for NMR structures with multiple models)
+    for (int iModel = 1; iModel <= nModels; iModel++) {
+        mmdb::Model* model = mmdb->GetModel(iModel);
+        if (!model) continue;
+
+        //Here is an approach for (bloomin) segIDs....repeat the segment determination for each segID
+        // simples :-)
+
+        std::set<std::string> segIDs;
+
+        {
+            // Establish a list of segIDs
+            int nAtoms = model->GetNumberOfAtoms(false);
+            mmdb::Atom** atoms = model->GetAllAtoms();
+
+            for (int iAtom = 0; iAtom < nAtoms; iAtom++){
+                segIDs.insert(std::string(atoms[iAtom]->segID));
+            }
         }
-    }
-    
-    std::set<std::string>::iterator segIDIter = segIDs.begin();
-    for (;segIDIter != segIDs.end(); ++segIDIter){
-        int          nChains;
-        mmdb::Chain**     chains;
-        model->GetChainTable(chains, nChains);
-        // std::cout << "debug:: identifyDishyBases(): Model 1 consists of " << nChains << " Chains\n";
-        //Pass through and identify any chain breaks
-        for (int iChain = 0; iChain < nChains; iChain ++){
-            mmdb::Chain* chain = model->GetChain(iChain);
-            FCXXCoord lastCoord (-1e30, -1e30, -1e30);
+
+        std::set<std::string>::iterator segIDIter = segIDs.begin();
+        for (;segIDIter != segIDs.end(); ++segIDIter){
+            int          nChains;
+            mmdb::Chain**     chains;
+            model->GetChainTable(chains, nChains);
+            // std::cout << "debug:: identifyDishyBases(): Model " << iModel << " consists of " << nChains << " Chains\n";
+            //Pass through and identify any chain breaks
+            for (int iChain = 0; iChain < nChains; iChain ++){
+                mmdb::Chain* chain = model->GetChain(iChain);
+                FCXXCoord lastCoord (-1e30, -1e30, -1e30);
             int nResidues;
             mmdb::Residue**   residues;
             chain->GetResidueTable(residues, nResidues);
@@ -360,6 +464,11 @@ int MyMolecule::identifyDishyBases(std::map<mmdb::Chain *, DishyBaseContainer_t>
                             residue_p->GetAtomTable(residue_atoms, nAtoms);
                             std::string res_name = residue_p->GetResName();
                             
+                            if(nAtoms>0){
+                               if(!residue_atoms[0]->isInSelection(selHnd)) {
+                                   continue;
+                               }
+                            }
                             // setup the alt confs for this residue
                             //
                             std::set<std::string> residue_alt_confs_set;
@@ -446,6 +555,7 @@ int MyMolecule::identifyDishyBases(std::map<mmdb::Chain *, DishyBaseContainer_t>
             }
         }
     }
+    } // end loop over models
     return 0;
 }
 
@@ -463,41 +573,46 @@ int MyMolecule::identifyBonds()
     mmdb->MakeBonds(true);
     int nModels = mmdb->GetNumberOfModels();
     // std::cout << "debug:: identifyBonds(): Protein consists of " << nModels << " Models\n";
-    mmdb::Model* model = mmdb->GetModel(1);
-    
-    int          nChains;
-    mmdb::Chain**     chains;
-    model->GetChainTable(chains, nChains);
-    // std::cout << "debug:: identifyBonds(): Model 1 consists of " << nChains << " Chains\n";
-    //Pass through and add bonds corresponding to peptide bonds
-    for (int iChain = 0; iChain < nChains; iChain ++){
-        mmdb::Chain* chain = model->GetChain(iChain);
-        int nResidues;
-        mmdb::Residue**   residues;
-        chain->GetResidueTable(residues, nResidues);
-        // std::cout << "debug:: identifyBonds(): Chain " << chain->GetChainID() << " consists of " << nResidues << " Residues\n";
-        mmdb::Residue* lastResidue = 0;
-        for (int iResidue = 0; iResidue < nResidues; iResidue++){
-            mmdb::Residue* residue = chain->GetResidue(iResidue);
-            if (residue->isAminoacid()){
-                if (lastResidue != 0){
-                    mmdb::Atom* CA_i = residue->GetAtom("CA", " C", "*");
-                    mmdb::Atom* CA_i_minus_1 = lastResidue->GetAtom("CA", " C", "*");
-                    if (CA_i != 0 && CA_i_minus_1 != 0) {
-                        FCXXCoord Coord_CA_i( CA_i->x, CA_i->y, CA_i->z);
-                        FCXXCoord Coord_CA_i_minus_1( CA_i_minus_1->x, CA_i_minus_1->y, CA_i_minus_1->z);
-                        FCXXCoord delta = (Coord_CA_i-Coord_CA_i_minus_1);
-                        if(delta.get3DLength()<4.1){
-                            mmdb::Atom* N_i = residue->GetAtom("N", " N", "*");
-                            mmdb::Atom* C_i_minus_1 = lastResidue->GetAtom("C", " C", "*");
-                            if(N_i!=0 && C_i_minus_1!=0){
-                                N_i->AddBond(C_i_minus_1, 1, 1);
-                                C_i_minus_1->AddBond(N_i, 1, 1);
+
+    // Loop over all models (important for NMR structures with multiple models)
+    for (int iModel = 1; iModel <= nModels; iModel++) {
+        mmdb::Model* model = mmdb->GetModel(iModel);
+        if (!model) continue;
+
+        int          nChains;
+        mmdb::Chain**     chains;
+        model->GetChainTable(chains, nChains);
+        // std::cout << "debug:: identifyBonds(): Model " << iModel << " consists of " << nChains << " Chains\n";
+        //Pass through and add bonds corresponding to peptide bonds
+        for (int iChain = 0; iChain < nChains; iChain ++){
+            mmdb::Chain* chain = model->GetChain(iChain);
+            int nResidues;
+            mmdb::Residue**   residues;
+            chain->GetResidueTable(residues, nResidues);
+            // std::cout << "debug:: identifyBonds(): Chain " << chain->GetChainID() << " consists of " << nResidues << " Residues\n";
+            mmdb::Residue* lastResidue = 0;
+            for (int iResidue = 0; iResidue < nResidues; iResidue++){
+                mmdb::Residue* residue = chain->GetResidue(iResidue);
+                if (residue->isAminoacid()){
+                    if (lastResidue != 0){
+                        mmdb::Atom* CA_i = residue->GetAtom("CA", " C", "*");
+                        mmdb::Atom* CA_i_minus_1 = lastResidue->GetAtom("CA", " C", "*");
+                        if (CA_i != 0 && CA_i_minus_1 != 0) {
+                            FCXXCoord Coord_CA_i( CA_i->x, CA_i->y, CA_i->z);
+                            FCXXCoord Coord_CA_i_minus_1( CA_i_minus_1->x, CA_i_minus_1->y, CA_i_minus_1->z);
+                            FCXXCoord delta = (Coord_CA_i-Coord_CA_i_minus_1);
+                            if(delta.get3DLength()<4.1){
+                                mmdb::Atom* N_i = residue->GetAtom("N", " N", "*");
+                                mmdb::Atom* C_i_minus_1 = lastResidue->GetAtom("C", " C", "*");
+                                if(N_i!=0 && C_i_minus_1!=0){
+                                    N_i->AddBond(C_i_minus_1, 1, 1);
+                                    C_i_minus_1->AddBond(N_i, 1, 1);
+                                }
                             }
                         }
                     }
+                    lastResidue = residue;
                 }
-                lastResidue = residue;
             }
         }
     }
@@ -528,6 +643,23 @@ FCXXCoord MyMolecule::centreOfSelectionHandle(int selHnd)
 void MyMolecule::writePDB(const std::string &filePath)
 {
     mmdb->WritePDBASCII(filePath.c_str());
+}
+
+void MyMolecule::setResidueRadii(const std::map<std::tuple<std::string, int, std::string>, std::tuple<float, float, float>> &radii) {
+    residueRadii = radii;
+}
+
+std::tuple<float, float, float> MyMolecule::getRadiiForResidue(mmdb::Residue *res) const {
+    if (!res) return std::make_tuple(1.0f, 1.0f, 1.0f);
+    std::string chain_id = res->GetChainID();
+    int res_no = res->GetSeqNum();
+    std::string ins_code = res->GetInsCode();
+    auto key = std::make_tuple(chain_id, res_no, ins_code);
+    auto it = residueRadii.find(key);
+    if (it != residueRadii.end()) {
+        return it->second;
+    }
+    return std::make_tuple(1.0f, 1.0f, 1.0f);
 }
 
 std::ostream& operator<<(std::ostream& o, const MyMolecule &myMolecule)

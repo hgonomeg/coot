@@ -8,19 +8,20 @@ std::vector<moorhen::h_bond>
 molecules_container_t::get_h_bonds(int imol, const std::string &cid_str, bool mcdonald_and_thornton) const {
 
    mmdb::realtype max_dist = 3.8; // pass this
+   bool debug = false;
 
-   std::vector<moorhen::h_bond> m_hbs;
+   std::vector<moorhen::h_bond> m_hbs; // returned value
 
    if (! is_valid_model_molecule(imol)) return m_hbs;
 
    mmdb::Manager *mol = get_mol(imol);
    coot::h_bonds hb;
-   int SelHnd_all = mol->NewSelection();
-   int SelHnd_lig = mol->NewSelection();
+   int SelHnd_all = mol->NewSelection(); // d
+   int SelHnd_lig = mol->NewSelection(); // d
    mol->SelectAtoms(SelHnd_all, 0, "*", mmdb::ANY_RES, "*", mmdb::ANY_RES, "*", "*", "*", "*", "*");
    mol->Select(SelHnd_lig, mmdb::STYPE_ATOM, cid_str.c_str(), mmdb::SKEY_NEW);
 
-   if (true) { // debug
+   if (debug) { // debug
       int nSelAtoms;
       mmdb::PPAtom local_SelAtom;
       mol->GetSelIndex(SelHnd_lig, local_SelAtom, nSelAtoms);
@@ -56,7 +57,7 @@ molecules_container_t::get_h_bonds(int imol, const std::string &cid_str, bool mc
    if (mcdonald_and_thornton)
       hbonds = hb.get_mcdonald_and_thornton(SelHnd_lig, SelHnd_all, mol, geom, max_dist);
    else
-      hbonds = hb.get(SelHnd_lig, SelHnd_all, mol, geom);
+      hbonds = hb.get(SelHnd_lig, SelHnd_all, mol, geom, imol);
 
    for(unsigned ib=0;ib<hbonds.size();ib++) {
 

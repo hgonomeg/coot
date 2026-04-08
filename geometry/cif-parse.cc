@@ -52,6 +52,51 @@
 
 #include "lbg-graph.hh"
 
+#include "utils/logging.hh"
+extern logging logger;
+
+void
+coot::protein_geometry::set_only_bonds(int dict_idx) {
+
+   if (dict_idx != -1) {
+      int drr_size = dict_res_restraints.size(); // type change
+      if (dict_idx < drr_size) {
+         dictionary_residue_restraints_t &dict = dict_res_restraints[dict_idx].second;
+         std::map<std::string, std::vector<std::pair<unsigned int, std::string> > > atom_name_map;
+         for (unsigned int i=0; i<dict.bond_restraint.size(); i++) {
+            const auto &bond = dict.bond_restraint[i];
+            if (bond.type() == "single") {
+               const std::string &atom_name_1 = bond.atom_id_1();
+               const std::string &atom_name_2 = bond.atom_id_2();
+               bool is_H_1 = dict.is_hydrogen(atom_name_1);
+               bool is_H_2 = dict.is_hydrogen(atom_name_2);
+               if (! is_H_1 && !is_H_2) {
+                  std::pair<unsigned int, std::string> p1(i, "first");
+                  std::pair<unsigned int, std::string> p2(i, "second");
+                  atom_name_map[bond.atom_id_1()].push_back(p1);
+                  atom_name_map[bond.atom_id_2()].push_back(p2);
+               }
+            }
+         }
+         std::map<std::string, std::vector<std::pair<unsigned int, std::string> > >::const_iterator it;
+         for (it=atom_name_map.begin(); it!=atom_name_map.end(); ++it) {
+            const std::vector<std::pair<unsigned int, std::string> > &v = it->second;
+            if (v.size() == 1) {
+               const auto &atom_name = it->first;
+               unsigned int bond_index = v[0].first;
+               const std::string &pos  = v[0].second;
+               dict.bond_restraint[bond_index].set_only_bond(pos, true);
+               if (false)
+                  std::cout << "debug:: set_only_bond() in " << dict.residue_info.comp_id
+                            << " atom " << atom_name << " " << pos
+                            << " " << dict.bond_restraint[bond_index].type()
+                            << " has only one non-Hydrogen bond" << std::endl;
+            }
+         }
+      }
+   }
+}
+
 // return the number of atoms read (not the number of bonds (because
 // that is not a good measure of having read the file properly for
 // (for example) CL)).
@@ -146,8 +191,10 @@ coot::protein_geometry::init_refmac_mon_lib(std::string ciffilename, int read_nu
 
       } else {
          if (verbose_mode)
-            std::cout << "There are " << ciffile.GetNofData() << " data in "
-                      << ciffilename << std::endl;
+            // std::cout << "There are " << ciffile.GetNofData() << " data in "
+            //                       << ciffilename << std::endl;
+            logger.log(log_t::INFO, "There are ", std::to_string(ciffile.GetNofData()),
+                       " data in ", ciffilename);
 
          for(int idata=0; idata<ciffile.GetNofData(); idata++) {
 
@@ -195,7 +242,6 @@ coot::protein_geometry::init_refmac_mon_lib(std::string ciffilename, int read_nu
 
                mmdb::mmcif::PLoop mmCIFLoop = data->GetLoop(cat_name.c_str() );
 
-               int n_loop_time = 0;
                if (mmCIFLoop == NULL) {
 
                   bool handled = false;
@@ -257,7 +303,6 @@ coot::protein_geometry::init_refmac_mon_lib(std::string ciffilename, int read_nu
 
                } else {
 
-                  n_loop_time++;
 
                   // We currently want to stop adding chem comp info
                   // if the chem_comp info comes from mon_lib_list.cif:
@@ -291,7 +336,7 @@ coot::protein_geometry::init_refmac_mon_lib(std::string ciffilename, int read_nu
 
                   // chiral
                   if (cat_name == "_chem_comp_chir") {
-                     std::pair<int, std::vector<std::string> > chirals = 
+                     std::pair<int, std::vector<std::string> > chirals =
                         comp_chiral(mmCIFLoop, imol_enc);
                      n_chiral += chirals.first;
                      for (unsigned int ichir=0; ichir<chirals.second.size(); ichir++)
@@ -312,13 +357,15 @@ coot::protein_geometry::init_refmac_mon_lib(std::string ciffilename, int read_nu
                   if (cat_name == "_pdbx_chem_comp_model_bond")
                      rmit.n_atoms += comp_bond(mmCIFLoop, imol_enc, true);
 
-                  // PDBe depiction
+                  // PDBe depiction -  needs _pdbe_chem_comp_bond_depiction parser also
                   if (cat_name == "_pdbe_chem_comp_atom_depiction")
                      pdbe_chem_comp_atom_depiction(mmCIFLoop, imol_enc);
 
                   if (cat_name == "_pdbx_chem_comp_description_generator")
                      pdbx_chem_comp_description_generator(mmCIFLoop, imol_enc);
 
+                  if (cat_name == "_chem_comp_acedrg")
+                     chem_comp_acedrg(mmCIFLoop, imol_enc);
                }
             }
             if (n_chiral) {
@@ -345,6 +392,8 @@ coot::protein_geometry::init_refmac_mon_lib(std::string ciffilename, int read_nu
    } // is regular file test
 
    // debug_mods();
+
+   set_only_bonds(rmit.monomer_idx);
 
    if (comp_ids.size() > 0)
       rmit.comp_id = comp_ids[0];
@@ -1894,7 +1943,41 @@ coot::protein_geometry::comp_plane(mmdb::mmcif::PLoop mmCIFLoop, int imol_enc) {
 	 std::cout << "problem reading comp plane" << std::endl;
       } 
    }
-} 
+}
+
+void
+coot::protein_geometry::chem_comp_acedrg(mmdb::mmcif::PLoop mmCIFLoop, int imol_enc) {
+
+   std::string comp_id;
+   for (int j=0; j<mmCIFLoop->GetLoopLength(); j++) {
+      int ierr = 0;
+      int ierr_tot = 0;
+      std::string atom_id;
+      std::string atom_type;
+      char *s = mmCIFLoop->GetString("comp_id", j, ierr);
+      if (! ierr)
+         if (s)
+            comp_id = s;
+      ierr_tot += ierr;
+      s = mmCIFLoop->GetString("atom_id", j, ierr);
+      if (! ierr) {
+         atom_id = s;
+      }
+      ierr_tot += ierr;
+      s = mmCIFLoop->GetString("atom_type", j, ierr);
+      if (! ierr) {
+         atom_type = s;
+      }
+      ierr_tot += ierr;
+
+      if (ierr_tot == 0) {
+         mon_lib_add_acedrg_atom_type(comp_id, imol_enc, atom_id, atom_type);
+      }
+   }
+
+}
+
+
 // 
 int
 coot::protein_geometry::add_chem_mods(mmdb::mmcif::PData data) {
@@ -2037,8 +2120,10 @@ coot::protein_geometry::init_standard() {
    std::string hardwired_default_place = util::append_dir_dir(pkg_data_dir, "lib");
    bool using_clibd_mon = false;
 
-   if (debug)
+   if (debug) {
+      std::cout << "DEBUG:: init_standard(): pkg_data_dir: " << pkg_data_dir << std::endl;
       std::cout << "DEBUG:: init_standard(): hardwired_default_place: " << hardwired_default_place << std::endl;
+   }
 
    std::string mon_lib_dir;
    short int env_dir_fails = 0;
@@ -2086,8 +2171,9 @@ coot::protein_geometry::init_standard() {
          } else {
             env_dir_fails = 0;
             if (verbose_mode)
-               std::cout << "INFO:: Using Standard CCP4 Refmac dictionary from"
-                         << " CLIBD_MON: " << s << std::endl;
+               // std::cout << "INFO:: Using Standard CCP4 Refmac dictionary from"
+               //           << " CLIBD_MON: " << s << std::endl;
+               logger.log(log_t::INFO, "Using Standard CCP4 Refmac dictionary from CLIBD_MON: " + std::string(s));
             mon_lib_dir = s;
             using_clibd_mon = true;
             // strip any trailing / from mon_lib_dir
@@ -2104,8 +2190,9 @@ coot::protein_geometry::init_standard() {
          s = getenv("CCP4_LIB");
          if (s) {
             if (verbose_mode)
-               std::cout << "INFO:: Using Standard CCP4 Refmac dictionary: "
-                         << s << std::endl;
+               // std::cout << "INFO:: Using Standard CCP4 Refmac dictionary: "
+               //           << s << std::endl;
+               logger.log(log_t::INFO, "Using Standard CCP4 Refmac dictionary: " + std::string(s));
             mon_lib_dir = s;
 
          } else {
@@ -2128,11 +2215,11 @@ coot::protein_geometry::init_standard() {
                   if (is_dir_or_link(lib_dir)) {
                      mon_lib_dir = lib_dir;
                   } else {
-                     std::cout << "WARNING:: COOT_PREFIX set, but no dictionary lib found\n";
+                     std::cout << "WARNING:: init_standard(): env var COOT_PREFIX set, but no dictionary lib found\n";
+                     std::cout << "WARNING:: init_standard(): env var COOT_PREFIX was set to \"" << s << "\"\n";
                   }
                } else {
-                  std::cout << "WARNING:: COOT_PREFIX not set, all attempts to "
-                            << "find dictionary lib failed\n";
+                  std::cout << "WARNING:: env var COOT_PREFIX not set" << std::endl;
                   mon_lib_dir.clear();
                }
             }
@@ -2141,7 +2228,7 @@ coot::protein_geometry::init_standard() {
    }
 
    if (debug)
-      std::cout << "Here with mon_lib_dir set to " << mon_lib_dir << std::endl;
+      std::cout << "DEBUG:: Here with mon_lib_dir set to " << mon_lib_dir << std::endl;
 
    if (mon_lib_dir.length() > 0) {
       mon_lib_dir =  coot::util::intelligent_debackslash(mon_lib_dir);
@@ -2245,13 +2332,13 @@ coot::dictionary_residue_restraints_t::write_cif(const std::string &filename) co
       std::cout << "rc not mmdb::mmcif::CIFRC_Ok " << rc << std::endl;
       printf ( " **** error: attempt to retrieve Loop as a Structure.\n" );
       if (!mmCIFStruct)  {
-              printf ( " **** error: mmCIFStruct is NULL - report as a bug\n" );
+         printf ( " **** error: mmCIFStruct is NULL - report as a bug\n" );
       }
    } else {
       if (rc == mmdb::mmcif::CIFRC_Created) {
-              // printf ( " -- new structure created\n" );
+         // printf ( " -- new structure created\n" );
       } else {
-              printf(" -- structure was already in mmCIF, it will be extended\n");
+         printf(" -- structure was already in mmCIF, it will be extended\n");
       }
       // std::cout << "SUMMARY:: rc mmdb::mmcif::CIFRC_Ok or newly created. " << std::endl;
 
@@ -2291,19 +2378,19 @@ coot::dictionary_residue_restraints_t::write_cif(const std::string &filename) co
       bool add_coordinates = true; // if no atoms have coords, this gets set to false.
       int n_atoms_with_coords = 0;
       for (unsigned int i=0; i<atom_info.size(); i++) {
-	      if (atom_info[i].model_Cartn.first)
-	         n_atoms_with_coords++;
-         }
+         if (atom_info[i].model_Cartn.first)
+            n_atoms_with_coords++;
+      }
 
-         if (n_atoms_with_coords == 0)
-	         add_coordinates = false;
+      if (n_atoms_with_coords == 0)
+         add_coordinates = false;
 
-         if (atom_info.size()) {
-	         rc = mmCIFData->AddLoop("_chem_comp_atom", mmCIFLoop);
-	         if (rc == mmdb::mmcif::CIFRC_Ok || rc == mmdb::mmcif::CIFRC_Created) {
-	         for (unsigned int i=0; i<atom_info.size(); i++) {
-	            const dict_atom &ai = atom_info[i];
-	            const char *ss =  residue_info.comp_id.c_str();
+      if (atom_info.size()) {
+         rc = mmCIFData->AddLoop("_chem_comp_atom", mmCIFLoop);
+         if (rc == mmdb::mmcif::CIFRC_Ok || rc == mmdb::mmcif::CIFRC_Created) {
+            for (unsigned int i=0; i<atom_info.size(); i++) {
+               const dict_atom &ai = atom_info[i];
+               const char *ss =  residue_info.comp_id.c_str();
                mmCIFLoop->PutString(ss, "comp_id", i);
                std::string annw = util::remove_whitespace(ai.atom_id).c_str();
                std::string qan = quoted_atom_name(annw);
@@ -2317,52 +2404,53 @@ coot::dictionary_residue_restraints_t::write_cif(const std::string &filename) co
                ss = up_type_energy.c_str();
                mmCIFLoop->PutString(ss, "type_energy", i);
                if (atom_info[i].partial_charge.first) {
-		         float v = atom_info[i].partial_charge.second;
-		         mmCIFLoop->PutReal(v, "partial_charge", i, 4);
-	         }
-	         if (add_coordinates) {
-		         if (atom_info[i].model_Cartn.first) {
-                  float x = atom_info[i].model_Cartn.second.x();
-                  float y = atom_info[i].model_Cartn.second.y();
-                  float z = atom_info[i].model_Cartn.second.z();
-                  mmCIFLoop->PutReal(x, "x", i, 6);
-                  mmCIFLoop->PutReal(y, "y", i, 6);
-                  mmCIFLoop->PutReal(z, "z", i, 6);
-		         }
-	         }
-	      }
-	   }
-   }
+                  float v = atom_info[i].partial_charge.second;
+                  mmCIFLoop->PutReal(v, "partial_charge", i, 4);
+               }
+               if (add_coordinates) {
+                  if (atom_info[i].model_Cartn.first) {
+                     float x = atom_info[i].model_Cartn.second.x();
+                     float y = atom_info[i].model_Cartn.second.y();
+                     float z = atom_info[i].model_Cartn.second.z();
+                     mmCIFLoop->PutReal(x, "x", i, 6);
+                     mmCIFLoop->PutReal(y, "y", i, 6);
+                     mmCIFLoop->PutReal(z, "z", i, 6);
+                  }
+               }
+            }
+         }
+      }
 
-   // bond loop
+      // bond loop
 
-   if (bond_restraint.size()) {
-      // bool nuclear_distances_flag = false;
-	   rc = mmCIFData->AddLoop("_chem_comp_bond", mmCIFLoop);
-	   if (rc == mmdb::mmcif::CIFRC_Ok || rc == mmdb::mmcif::CIFRC_Created) {
-	    // std::cout << " number of bonds: " << bond_restraint.size() << std::endl;
+      if (bond_restraint.size() > 0) {
+         // bool nuclear_distances_flag = false;
+         rc = mmCIFData->AddLoop("_chem_comp_bond", mmCIFLoop);
+         if (rc == mmdb::mmcif::CIFRC_Ok || rc == mmdb::mmcif::CIFRC_Created) {
+            // std::cout << " number of bonds: " << bond_restraint.size() << std::endl;
 
             // nuclear_distances_flag means that we only have one distance - and it's the
             // nuclear distance. So we need to "invent" non-nuclear distance for bonds
             // to hydrogen atoms
-	      for (unsigned int i=0; i<bond_restraint.size(); i++) {
-            const dict_bond_restraint_t &br = bond_restraint[i];
-            std::string value_dist("value_dist");
-            std::string value_dist_esd("value_dist_esd");
-	         // std::cout << "ading bond number " << i << std::endl;
-	         const char *ss = residue_info.comp_id.c_str();
-	         mmCIFLoop->PutString(ss, "comp_id", i);
-	         std::string id_1 = util::remove_whitespace(br.atom_id_1_4c());
-	         std::string id_2 = util::remove_whitespace(br.atom_id_2_4c());
-	         std::string qan_1 = quoted_atom_name(id_1);
-	         std::string qan_2 = quoted_atom_name(id_2);
-	         ss = id_1.c_str();
-	         mmCIFLoop->PutString(id_1.c_str(), "atom_id_1", i);
-	         ss = id_2.c_str();
-	         mmCIFLoop->PutString(id_2.c_str(), "atom_id_2", i);
-            std::string bond_type = bond_restraint[i].type();
-	         mmCIFLoop->PutString(bond_type.c_str(), "type", i);
-	         try {
+            for (unsigned int i=0; i<bond_restraint.size(); i++) {
+
+               const dict_bond_restraint_t &br = bond_restraint[i];
+               std::string value_dist("value_dist");
+               std::string value_dist_esd("value_dist_esd");
+               // std::cout << "ading bond number " << i << std::endl;
+               const char *ss = residue_info.comp_id.c_str();
+               mmCIFLoop->PutString(ss, "comp_id", i);
+               std::string id_1 = util::remove_whitespace(br.atom_id_1_4c());
+               std::string id_2 = util::remove_whitespace(br.atom_id_2_4c());
+               std::string qan_1 = quoted_atom_name(id_1);
+               std::string qan_2 = quoted_atom_name(id_2);
+               ss = id_1.c_str();
+               mmCIFLoop->PutString(id_1.c_str(), "atom_id_1", i);
+               ss = id_2.c_str();
+               mmCIFLoop->PutString(id_2.c_str(), "atom_id_2", i);
+               std::string bond_type = bond_restraint[i].type();
+               mmCIFLoop->PutString(bond_type.c_str(), "type", i);
+               try {
 
                   if (nuclear_distances_flag) {
 
@@ -2394,144 +2482,144 @@ coot::dictionary_residue_restraints_t::write_cif(const std::string &filename) co
 
                   }
 
-	       }
-	       catch (const std::runtime_error &rte) {
-		      // do nothing, it's not really an error if the dictionary
-		      // doesn't have target geometry (the bonding description came
-		      // from a Chemical Component Dictionary entry for example).
-	      }
-	   }
-	 }
-   }
+               }
+               catch (const std::runtime_error &rte) {
+                  // do nothing, it's not really an error if the dictionary
+                  // doesn't have target geometry (the bonding description came
+                  // from a Chemical Component Dictionary entry for example).
+               }
+            }
+         }
+      }
 
       // angle loop
 
-      if (angle_restraint.size()) {
-	 rc = mmCIFData->AddLoop("_chem_comp_angle", mmCIFLoop);
-	 if (rc == mmdb::mmcif::CIFRC_Ok || rc == mmdb::mmcif::CIFRC_Created) {
-	    // std::cout << " number of angles: " << angle_restraint.size() << std::endl;
-	    for (unsigned int i=0; i<angle_restraint.size(); i++) {
-	       // std::cout << "ading angle number " << i << std::endl;
-	       std::string id_1 = util::remove_whitespace(angle_restraint[i].atom_id_1_4c());
-	       std::string id_2 = util::remove_whitespace(angle_restraint[i].atom_id_2_4c());
-	       std::string qan_1 = quoted_atom_name(id_1);
-	       std::string qan_2 = quoted_atom_name(id_2);
-	       const char *ss = residue_info.comp_id.c_str();
-	       mmCIFLoop->PutString(ss, "comp_id", i);
-	       ss = id_1.c_str();
-	       mmCIFLoop->PutString(id_1.c_str(), "atom_id_1", i);
-	       ss = id_2.c_str();
-	       mmCIFLoop->PutString(id_2.c_str(), "atom_id_2", i);
+      if (angle_restraint.size() > 0) {
+         rc = mmCIFData->AddLoop("_chem_comp_angle", mmCIFLoop);
+         if (rc == mmdb::mmcif::CIFRC_Ok || rc == mmdb::mmcif::CIFRC_Created) {
+            // std::cout << " number of angles: " << angle_restraint.size() << std::endl;
+            for (unsigned int i=0; i<angle_restraint.size(); i++) {
+               // std::cout << "ading angle number " << i << std::endl;
+               std::string id_1 = util::remove_whitespace(angle_restraint[i].atom_id_1_4c());
+               std::string id_2 = util::remove_whitespace(angle_restraint[i].atom_id_2_4c());
+               std::string qan_1 = quoted_atom_name(id_1);
+               std::string qan_2 = quoted_atom_name(id_2);
+               const char *ss = residue_info.comp_id.c_str();
+               mmCIFLoop->PutString(ss, "comp_id", i);
+               ss = id_1.c_str();
+               mmCIFLoop->PutString(id_1.c_str(), "atom_id_1", i);
+               ss = id_2.c_str();
+               mmCIFLoop->PutString(id_2.c_str(), "atom_id_2", i);
 
-	       // bug fix(!) intermediate value my_ss clears up casting
-	       // problem (inheritance-related?) on writing.
-	       std::string id_3 = util::remove_whitespace(angle_restraint[i].atom_id_3_4c());
-	       // 20170305 std::string qan_3 = quoted_atom_name(my_ss);
-	       // ss = qan_3.c_str();
-	       mmCIFLoop->PutString(id_3.c_str(), "atom_id_3", i);
+               // bug fix(!) intermediate value my_ss clears up casting
+               // problem (inheritance-related?) on writing.
+               std::string id_3 = util::remove_whitespace(angle_restraint[i].atom_id_3_4c());
+               // 20170305 std::string qan_3 = quoted_atom_name(my_ss);
+               // ss = qan_3.c_str();
+               mmCIFLoop->PutString(id_3.c_str(), "atom_id_3", i);
 
-	       float v = angle_restraint[i].angle();
-	       mmCIFLoop->PutReal(v, "value_angle", i, 5);
-	       v = angle_restraint[i].esd();
-	       mmCIFLoop->PutReal(v, "value_angle_esd", i, 3);
-	    }
-	 }
+               float v = angle_restraint[i].angle();
+               mmCIFLoop->PutReal(v, "value_angle", i, 5);
+               v = angle_restraint[i].esd();
+               mmCIFLoop->PutReal(v, "value_angle_esd", i, 3);
+            }
+         }
       }
 
       // torsion loop
 
       if (torsion_restraint.size() > 0) {
-	 rc = mmCIFData->AddLoop("_chem_comp_tor", mmCIFLoop);
-	 if (rc == mmdb::mmcif::CIFRC_Ok || rc == mmdb::mmcif::CIFRC_Created) {
-	    // std::cout << " number of torsions: " << torsion_restraint.size() << std::endl;
-	    for (unsigned int i=0; i<torsion_restraint.size(); i++) {
-	       // std::cout << "ading torsion number " << i << std::endl;
+         rc = mmCIFData->AddLoop("_chem_comp_tor", mmCIFLoop);
+         if (rc == mmdb::mmcif::CIFRC_Ok || rc == mmdb::mmcif::CIFRC_Created) {
+            // std::cout << " number of torsions: " << torsion_restraint.size() << std::endl;
+            for (unsigned int i=0; i<torsion_restraint.size(); i++) {
+               // std::cout << "ading torsion number " << i << std::endl;
 
                // note strange string usage is due to static analysis use-after-free error report
                // don't reuse ss
-	       std::string id_1 = util::remove_whitespace(torsion_restraint[i].atom_id_1_4c());
-	       std::string id_2 = util::remove_whitespace(torsion_restraint[i].atom_id_2_4c());
-	       std::string id_3 = util::remove_whitespace(torsion_restraint[i].atom_id_3_4c());
-	       std::string id_4 = util::remove_whitespace(torsion_restraint[i].atom_id_4_4c());
-	       std::string qan_1 = quoted_atom_name(id_1);
-	       std::string qan_2 = quoted_atom_name(id_2);
-	       std::string qan_3 = quoted_atom_name(id_3);
-	       std::string qan_4 = quoted_atom_name(id_4);
+               std::string id_1 = util::remove_whitespace(torsion_restraint[i].atom_id_1_4c());
+               std::string id_2 = util::remove_whitespace(torsion_restraint[i].atom_id_2_4c());
+               std::string id_3 = util::remove_whitespace(torsion_restraint[i].atom_id_3_4c());
+               std::string id_4 = util::remove_whitespace(torsion_restraint[i].atom_id_4_4c());
+               std::string qan_1 = quoted_atom_name(id_1);
+               std::string qan_2 = quoted_atom_name(id_2);
+               std::string qan_3 = quoted_atom_name(id_3);
+               std::string qan_4 = quoted_atom_name(id_4);
                std::string residue_id = residue_info.comp_id;
-	       mmCIFLoop->PutString(residue_id.c_str(), "comp_id", i);
-	       // ss = torsion_restraint[i].id().c_str();
+               mmCIFLoop->PutString(residue_id.c_str(), "comp_id", i);
+               // ss = torsion_restraint[i].id().c_str();
                std::string torsion_id = torsion_restraint[i].id();
-	       mmCIFLoop->PutString(torsion_id.c_str(), "id", i);
-	       // ss = id_1.c_str();
+               mmCIFLoop->PutString(torsion_id.c_str(), "id", i);
+               // ss = id_1.c_str();
                std::string torsion_atom_id_1 = id_1;
-	       mmCIFLoop->PutString(torsion_atom_id_1.c_str(), "atom_id_1", i);
-	       // ss = id_2.c_str();
+               mmCIFLoop->PutString(torsion_atom_id_1.c_str(), "atom_id_1", i);
+               // ss = id_2.c_str();
                std::string torsion_atom_id_2 = id_2;
-	       mmCIFLoop->PutString(torsion_atom_id_2.c_str(), "atom_id_2", i);
-	       // ss = id_3.c_str();
+               mmCIFLoop->PutString(torsion_atom_id_2.c_str(), "atom_id_2", i);
+               // ss = id_3.c_str();
                std::string torsion_atom_id_3 = id_3;
-	       mmCIFLoop->PutString(torsion_atom_id_3.c_str(), "atom_id_3", i);
-	       // ss = id_4.c_str();
+               mmCIFLoop->PutString(torsion_atom_id_3.c_str(), "atom_id_3", i);
+               // ss = id_4.c_str();
                std::string torsion_atom_id_4 = id_4;
-	       mmCIFLoop->PutString(torsion_atom_id_4.c_str(), "atom_id_4", i);
-	       float v = torsion_restraint[i].angle();
-	       mmCIFLoop->PutReal(v, "value_angle", i, 5);
-	       v = torsion_restraint[i].esd();
-	       mmCIFLoop->PutReal(v, "value_angle_esd", i, 3);
-	       int p = torsion_restraint[i].periodicity();
-	       mmCIFLoop->PutInteger(p, "period", i);
-	    }
-	 }
+               mmCIFLoop->PutString(torsion_atom_id_4.c_str(), "atom_id_4", i);
+               float v = torsion_restraint[i].angle();
+               mmCIFLoop->PutReal(v, "value_angle", i, 5);
+               v = torsion_restraint[i].esd();
+               mmCIFLoop->PutReal(v, "value_angle_esd", i, 3);
+               int p = torsion_restraint[i].periodicity();
+               mmCIFLoop->PutInteger(p, "period", i);
+            }
+         }
       }
 
       // chiral loop
       //
       if (chiral_restraint.size() > 0) {
-	 rc = mmCIFData->AddLoop("_chem_comp_chir", mmCIFLoop);
-	 if (rc == mmdb::mmcif::CIFRC_Ok || rc == mmdb::mmcif::CIFRC_Created) {
-	    // std::cout << " number of chirals: " << chiral_restraint.size() << std::endl;
-	    for (unsigned int i=0; i<chiral_restraint.size(); i++) {
-	       // std::cout << "ading chiral number " << i << std::endl;
-	       // const char *ss = residue_info.comp_id.c_str();
-	       std::string id_c = util::remove_whitespace(chiral_restraint[i].atom_id_c_4c());
-	       std::string id_1 = util::remove_whitespace(chiral_restraint[i].atom_id_1_4c());
-	       std::string id_2 = util::remove_whitespace(chiral_restraint[i].atom_id_2_4c());
-	       std::string id_3 = util::remove_whitespace(chiral_restraint[i].atom_id_3_4c());
-	       std::string qan_c = quoted_atom_name(id_c);
-	       std::string qan_1 = quoted_atom_name(id_1);
-	       std::string qan_2 = quoted_atom_name(id_2);
-	       std::string qan_3 = quoted_atom_name(id_3);
+         rc = mmCIFData->AddLoop("_chem_comp_chir", mmCIFLoop);
+         if (rc == mmdb::mmcif::CIFRC_Ok || rc == mmdb::mmcif::CIFRC_Created) {
+            // std::cout << " number of chirals: " << chiral_restraint.size() << std::endl;
+            for (unsigned int i=0; i<chiral_restraint.size(); i++) {
+               // std::cout << "ading chiral number " << i << std::endl;
+               // const char *ss = residue_info.comp_id.c_str();
+               std::string id_c = util::remove_whitespace(chiral_restraint[i].atom_id_c_4c());
+               std::string id_1 = util::remove_whitespace(chiral_restraint[i].atom_id_1_4c());
+               std::string id_2 = util::remove_whitespace(chiral_restraint[i].atom_id_2_4c());
+               std::string id_3 = util::remove_whitespace(chiral_restraint[i].atom_id_3_4c());
+               std::string qan_c = quoted_atom_name(id_c);
+               std::string qan_1 = quoted_atom_name(id_1);
+               std::string qan_2 = quoted_atom_name(id_2);
+               std::string qan_3 = quoted_atom_name(id_3);
                std::string residue_id = residue_info.comp_id;
-	       mmCIFLoop->PutString(residue_id.c_str(), "comp_id", i);
-	       // ss = chiral_restraint[i].Chiral_Id().c_str();
+               mmCIFLoop->PutString(residue_id.c_str(), "comp_id", i);
+               // ss = chiral_restraint[i].Chiral_Id().c_str();
                std::string chiral_id = chiral_restraint[i].Chiral_Id();
-	       mmCIFLoop->PutString(chiral_id.c_str(), "id", i);
-	       // ss = id_c.c_str();
-	       mmCIFLoop->PutString(id_c.c_str(), "atom_id_centre", i);
-	       mmCIFLoop->PutString(id_1.c_str(), "atom_id_1", i);
-	       mmCIFLoop->PutString(id_2.c_str(), "atom_id_2", i);
-	       mmCIFLoop->PutString(id_3.c_str(), "atom_id_3", i);
-	       int sign = chiral_restraint[i].volume_sign;
+               mmCIFLoop->PutString(chiral_id.c_str(), "id", i);
+               // ss = id_c.c_str();
+               mmCIFLoop->PutString(id_c.c_str(), "atom_id_centre", i);
+               mmCIFLoop->PutString(id_1.c_str(), "atom_id_1", i);
+               mmCIFLoop->PutString(id_2.c_str(), "atom_id_2", i);
+               mmCIFLoop->PutString(id_3.c_str(), "atom_id_3", i);
+               int sign = chiral_restraint[i].volume_sign;
                std::string sign_string = "both";
-	       if (sign == 1)
-		  sign_string = "positiv";
-	       if (sign == -1)
-		  sign_string = "negativ";
-	       mmCIFLoop->PutString(sign_string.c_str(), "volume_sign", i);
-	    }
-	 }
+               if (sign == 1)
+                  sign_string = "positiv";
+               if (sign == -1)
+                  sign_string = "negativ";
+               mmCIFLoop->PutString(sign_string.c_str(), "volume_sign", i);
+            }
+         }
       }
 
       // plane loop
       if (plane_restraint.size() > 0) {
-	      rc = mmCIFData->AddLoop("_chem_comp_plane_atom", mmCIFLoop);
-	      if (rc == mmdb::mmcif::CIFRC_Ok || rc == mmdb::mmcif::CIFRC_Created) {
-	         // std::cout << " number of planes: " << plane_restraint.size() << std::endl;
-	         int icount = 0;
-	         for (unsigned int i=0; i<plane_restraint.size(); i++) {
-	            // std::cout << "DEBUG:: adding plane number " << i << std::endl;
-	            for (int iat=0; iat<plane_restraint[i].n_atoms(); iat++) {
-		            const char *ss = residue_info.comp_id.c_str();
+              rc = mmCIFData->AddLoop("_chem_comp_plane_atom", mmCIFLoop);
+              if (rc == mmdb::mmcif::CIFRC_Ok || rc == mmdb::mmcif::CIFRC_Created) {
+                 // std::cout << " number of planes: " << plane_restraint.size() << std::endl;
+                 int icount = 0;
+                 for (unsigned int i=0; i<plane_restraint.size(); i++) {
+                    // std::cout << "DEBUG:: adding plane number " << i << std::endl;
+                    for (int iat=0; iat<plane_restraint[i].n_atoms(); iat++) {
+                            const char *ss = residue_info.comp_id.c_str();
                   mmCIFLoop->PutString(ss, "comp_id", icount);
                   ss = plane_restraint[i].plane_id.c_str();
                   mmCIFLoop->PutString(ss, "plane_id", icount);
@@ -2544,9 +2632,9 @@ coot::dictionary_residue_restraints_t::write_cif(const std::string &filename) co
                   float v = plane_restraint[i].dist_esd(iat);
                   mmCIFLoop->PutReal(v, "dist_esd", icount, 4);
                   icount++;
-	            }
-	         }
-	      }
+                    }
+                 }
+              }
       }
 
 
@@ -2555,60 +2643,60 @@ coot::dictionary_residue_restraints_t::write_cif(const std::string &filename) co
       // delete mmCIFLoop; // crashed when enabled?
 
       int status = mmCIFFile->WriteMMCIFFile(filename.c_str());
-      if (status == 0)
-	      std::cout << "INFO:: wrote mmCIF \"" << filename << "\"" << std::endl;
-      else
-	      std::cout << "INFO:: on write mmCIF \"" << filename << "\" status: "
-		             << status << std::endl;
+      if (status == 0) {
+              // std::cout << "INFO:: wrote mmCIF \"" << filename << "\"" << std::endl;
+              logger.log(log_t::INFO, "wrote mmCIF", filename);
+      } else {
+              // std::cout << "INFO:: on write mmCIF \"" << filename << "\" status: "
+              //                << status << std::endl;
+              logger.log(log_t::INFO, "on write mmCIF", filename, "status:", status);
+      }
    }
    delete mmCIFFile; // deletes all its attributes too.
 }
 
 void
 coot::dictionary_residue_restraints_t::write_cif_pdbx_chem_comp_descriptor(mmdb::mmcif::Data *mmCIFData) const {
-
-   
-
-} 
+}
 
 // constructor
 coot::simple_cif_reader::simple_cif_reader(const std::string &cif_dictionary_file_name) {
-   
+
    mmdb::mmcif::File ciffile;
    if (! is_regular_file(cif_dictionary_file_name)) {
       std::cout << "WARNIG:: cif dictionary " << cif_dictionary_file_name
-		<< " not found" << std::endl;
+                << " not found" << std::endl;
    } else {
       int ierr = ciffile.ReadMMCIFFile(cif_dictionary_file_name.c_str());
       if (ierr != mmdb::mmcif::CIFRC_Ok) {
-	 std::cout << "Dirty mmCIF file? " << cif_dictionary_file_name
-		   << std::endl;
+         std::cout << "Dirty mmCIF file? " << cif_dictionary_file_name
+                   << std::endl;
       } else {
-	 for(int idata=0; idata<ciffile.GetNofData(); idata++) { 
-         
-	    mmdb::mmcif::PData data = ciffile.GetCIFData(idata);
-	    for (int icat=0; icat<data->GetNumberOfCategories(); icat++) { 
-	       mmdb::mmcif::PCategory cat = data->GetCategory(icat);
-	       std::string cat_name(cat->GetCategoryName());
-	       mmdb::mmcif::PLoop mmCIFLoop =
-		  data->GetLoop(cat_name.c_str() );
-	       if (mmCIFLoop == NULL) { 
-		  std::cout << "null loop" << std::endl; 
-	       } else {
-		  if (cat_name == "_chem_comp") {
-		     int ierr = 0;
-		     for (int j=0; j<mmCIFLoop->GetLoopLength(); j++) {
-			char *n = mmCIFLoop->GetString("name", j, ierr);
-			char *t = mmCIFLoop->GetString("three_letter_code", j, ierr);
-			if (n && t) {
-			   names.push_back(n);
-			   three_letter_codes.push_back(t);
-			}
-		     }
-		  }
-	       }
-	    }
-	 }
+         for(int idata=0; idata<ciffile.GetNofData(); idata++) {
+
+            mmdb::mmcif::PData data = ciffile.GetCIFData(idata);
+            for (int icat=0; icat<data->GetNumberOfCategories(); icat++) {
+               mmdb::mmcif::PCategory cat = data->GetCategory(icat);
+               std::string cat_name(cat->GetCategoryName());
+               mmdb::mmcif::PLoop mmCIFLoop =
+                  data->GetLoop(cat_name.c_str() );
+               if (mmCIFLoop == NULL) {
+                  std::cout << "null loop" << std::endl;
+               } else {
+                  if (cat_name == "_chem_comp") {
+                     int ierr = 0;
+                     for (int j=0; j<mmCIFLoop->GetLoopLength(); j++) {
+                        char *n = mmCIFLoop->GetString("name", j, ierr);
+                        char *t = mmCIFLoop->GetString("three_letter_code", j, ierr);
+                        if (n && t) {
+                           names.push_back(n);
+                           three_letter_codes.push_back(t);
+                        }
+                     }
+                  }
+               }
+            }
+         }
       }
    }
 }
@@ -2621,8 +2709,8 @@ coot::simple_cif_reader::has_restraints_for(const std::string &res_type) {
    bool r = 0;
    for (unsigned int i=0; i<three_letter_codes.size(); i++) {
       if (three_letter_codes[i] == res_type) {
-	 r = 1;
-	 break;
+         r = 1;
+         break;
       }
    }
    return r;
@@ -2630,7 +2718,7 @@ coot::simple_cif_reader::has_restraints_for(const std::string &res_type) {
 
 
 // maybe these function need their own file.  For now they can go here.
-// 
+//
 void
 coot::protein_geometry::pdbx_chem_comp_descriptor(mmdb::mmcif::PLoop mmCIFLoop, int imol_enc) {
 
@@ -2639,7 +2727,7 @@ coot::protein_geometry::pdbx_chem_comp_descriptor(mmdb::mmcif::PLoop mmCIFLoop, 
    std::string program;
    std::string program_version;
    std::string descriptor;
-   
+
    for (int j=0; j<mmCIFLoop->GetLoopLength(); j++) {
       int ierr;
       int ierr_tot = 0;
@@ -2657,10 +2745,10 @@ coot::protein_geometry::pdbx_chem_comp_descriptor(mmdb::mmcif::PLoop mmCIFLoop, 
       s = mmCIFLoop->GetString("type",j,ierr);
       ierr_tot += ierr;
       if (s) type = s;
-      
+
       if (ierr_tot == 0) {
-	 pdbx_chem_comp_descriptor_item descr(type, program, program_version, descriptor);
-	 add_pdbx_descriptor(comp_id, imol_enc, descr);
+         pdbx_chem_comp_descriptor_item descr(type, program, program_version, descriptor);
+         add_pdbx_descriptor(comp_id, imol_enc, descr);
       }
    }
 }
@@ -2670,18 +2758,18 @@ coot::protein_geometry::pdbx_chem_comp_descriptor(mmdb::mmcif::PLoop mmCIFLoop, 
 // imol_enc will always be IMOL_ENC_ANY, surely
 void
 coot::protein_geometry::add_pdbx_descriptor(const std::string &comp_id,
-					    int imol_enc,
-					    pdbx_chem_comp_descriptor_item &descr) {
+                                            int imol_enc,
+                                            pdbx_chem_comp_descriptor_item &descr) {
 
    // like the others, not using iterators because we don't have a
    // comparitor using a string (the comp_id).
-   // 
+   //
    bool found = false;
    for (unsigned int i=0; i<dict_res_restraints.size(); i++) {
       if (dict_res_restraints[i].second.residue_info.comp_id == comp_id) {
-	 found = true;
-	 dict_res_restraints[i].second.descriptors.descriptors.push_back(descr);
-	 break;
+         found = true;
+         dict_res_restraints[i].second.descriptors.descriptors.push_back(descr);
+         break;
       }
    }
    if (! found) {
@@ -2689,5 +2777,5 @@ coot::protein_geometry::add_pdbx_descriptor(const std::string &comp_id,
       rest.descriptors.descriptors.push_back(descr);
       std::pair<int, dictionary_residue_restraints_t> p(imol_enc, rest);
       dict_res_restraints.push_back(p);
-   } 
+   }
 }

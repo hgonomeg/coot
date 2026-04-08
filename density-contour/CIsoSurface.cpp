@@ -832,7 +832,8 @@ CIsoSurface<T>::GenerateTriangles_from_Xmap(const clipper::Xmap<T>& crystal_map,
                                             coot::Cartesian centre_point,
                                             int isample_step,
                                             int iream_start, int n_reams,
-                                            bool is_em_map) {
+                                            bool is_em_map,
+                                            bool use_vertex_gradients_for_map_normals_flag) {
 
    coot::density_contour_triangles_container_t tri_con;
 
@@ -1043,14 +1044,18 @@ CIsoSurface<T>::GenerateTriangles_from_Xmap(const clipper::Xmap<T>& crystal_map,
       }
    }
 
-   if (true) // add user control
-      tri_con.calculate_normals();
-   else
+   if (use_vertex_gradients_for_map_normals_flag)
       tri_con.calculate_normals_for_vertices(crystal_map);
+   else
+      tri_con.calculate_normals();
 
       // tri_con.remove_small_triangles(); // all very interesting, but not the way to do it.
                                         // We need to merge and remove after all the
                                         // sections have been calculated.
+
+   // no triangles means nothing should be returned
+   if (tri_con.point_indices.empty())
+      tri_con.clear();
 
    return tri_con;
 }
@@ -1779,6 +1784,8 @@ CIsoSurface<T>::returnTriangles(const clipper::Xmap<T>& xmap,
 				float radius,
 				coot::Cartesian centre,
 				bool is_em_map) const {
+
+   std::cout << "--------------- running returnTriangles() " << std::endl;
 
    coot::CartesianPairInfo result_wrapper;
 

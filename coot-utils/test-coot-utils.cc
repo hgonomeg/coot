@@ -392,8 +392,9 @@ int test_atom_overlaps() {
    if (read_status == mmdb::Error_NoError) {
      mmdb::Residue *residue_p = coot::util::get_residue(spec, mol);
      if (residue_p) {
+        int imol = 0;
         std::vector<mmdb::Residue *> neighbs = coot::residues_near_residue(residue_p, mol, 5);
-        coot::atom_overlaps_container_t overlaps(residue_p, neighbs, mol, &geom, 0.5, 0.25);
+        coot::atom_overlaps_container_t overlaps(residue_p, neighbs, mol, imol, &geom, 0.5, 0.25);
         coot::atom_overlaps_dots_container_t c = overlaps.contact_dots_for_ligand();
      } else {
        std::cout << "Can't find residue" << spec << std::endl;
@@ -1561,11 +1562,210 @@ test_dictionary_conformers(int argc, char **argv) {
 }
 
 
+void test_partition_map_by_chain(int argc, char **argv) {
+
+   if (argc > 2) {
+      std::string map_file_name_1 = argv[1];
+      clipper::CCP4MAPfile file_1;
+      clipper::Xmap<float> xmap_1;
+      std::cout << "# reading map " << map_file_name_1 << std::endl;
+      file_1.open_read(map_file_name_1);
+      file_1.import_xmap(xmap_1);
+
+
+      clipper::Cell cell = xmap_1.cell();
+      clipper::Spacegroup sg = xmap_1.spacegroup();
+      clipper::Grid_sampling gs = xmap_1.grid_sampling();
+
+      std::cout << "Cell:" << cell.format() << std::endl;
+      std::cout << "Spacegroup:" << sg.symbol_hm() << std::endl;
+      std::cout << "Grid Sampling:" << gs.format() << std::endl;
+
+      std::string pdb_file_name = argv[2];
+      atom_selection_container_t asc = get_atom_selection(pdb_file_name, false, true, false);
+
+      if (asc.read_success) {
+         std::string status_string;
+         std::vector<std::pair<std::string, clipper::Xmap<float> > > maps =
+            coot::util::partition_map_by_chain(xmap_1, asc.mol, &status_string);
+         for (size_t i=0; i < maps.size(); i++) {
+            std::string map_file_name = "partitioned-" + maps[i].first + ".map";
+            const auto &xmap = maps[i].second;
+            clipper::CCP4MAPfile outmapfile;
+            outmapfile.open_write(map_file_name);
+            outmapfile.export_xmap(xmap);
+            outmapfile.close_write();
+         }
+      }
+   }
+}
+
+
+void test_make_mask_map(int argc, char **argv) {
+
+   if (argc > 2) {
+      std::string map_file_name_1 = argv[1];
+      clipper::CCP4MAPfile file_1;
+      clipper::Xmap<float> xmap;
+      std::cout << "# reading map " << map_file_name_1 << std::endl;
+      file_1.open_read(map_file_name_1);
+      file_1.import_xmap(xmap);
+
+      clipper::Cell cell = xmap.cell();
+      clipper::Spacegroup sg = xmap.spacegroup();
+      clipper::Grid_sampling gs = xmap.grid_sampling();
+
+      std::cout << "Cell: " << cell.format() << std::endl;
+      std::cout << "Spacegroup: " << sg.symbol_hm() << std::endl;
+      std::cout << "Grid Sampling: " << gs.format() << std::endl;
+
+      std::string pdb_file_name = argv[2];
+      atom_selection_container_t asc = get_atom_selection(pdb_file_name, false, true, false);
+
+      if (asc.read_success) {
+         mmdb::Manager *mol = asc.mol;
+         int selection_handle = mol->NewSelection();
+         std::string selection_string = "/";
+         asc.mol->Select(selection_handle, mmdb::STYPE_ATOM, selection_string.c_str(), mmdb::SKEY_NEW);
+         float radius = 4.5f;
+         float smooth = 1.0f;
+         clipper::Xmap<float> mask_xmap =
+            coot::util::make_map_mask(sg, cell, gs, asc.mol, selection_handle, radius, smooth);
+         clipper::CCP4MAPfile outmapfile;
+         std::string map_file_name = "A-chain-mask.map";
+         outmapfile.open_write(map_file_name);
+         outmapfile.export_xmap(mask_xmap);
+         outmapfile.close_write();
+         mol->DeleteSelection(selection_handle);
+      }
+   }
+}
+
+#include "cremer-pople.hh"
+
+void
+test_cremer_pople(int argc, char **argv) {
+
+   auto is_member = [] (const std::string &rn, const std::vector<std::string> &res_names) {
+      return std::find(res_names.begin(), res_names.end(), rn) != res_names.end();
+   };
+
+   if (argc > 1) {
+      std::string pdb_file_name(argv[1]);
+      atom_selection_container_t asc = get_atom_selection(pdb_file_name, false);
+      if (asc.read_success) {
+         mmdb::Manager *mol = asc.mol;
+         std::vector<std::string> res_names = {"NAG", "MAN", "BMA", "GAL", "FUC"};
+         for(int imod = 1; imod<=mol->GetNumberOfModels(); imod++) {
+            mmdb::Model *model_p = mol->GetModel(imod);
+            if (model_p) {
+               int n_chains = model_p->GetNumberOfChains();
+               for (int ichain=0; ichain<n_chains; ichain++) {
+                  mmdb::Chain *chain_p = model_p->GetChain(ichain);
+                  int n_res = chain_p->GetNumberOfResidues();
+                  for (int ires=0; ires<n_res; ires++) {
+                     mmdb::Residue *residue_p = chain_p->GetResidue(ires);
+                     if (residue_p) {
+                        std::string rn = residue_p->GetResName();
+                        if (is_member(rn, res_names)) {
+                           coot::cremer_pople_t cpi(residue_p);
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      }
+   }
+}
+
+int test_ribose_torsions(int argc, char **argv) {
+
+   std::string pdb_file_name = "8b0x.cif";
+   if (argc > 1)
+      pdb_file_name = argv[1];
+
+   int status = 0;
+   atom_selection_container_t asc = get_atom_selection(pdb_file_name, false, true, true);
+   std::vector<std::string> base_names = {"A", "G", "T", "U"};
+   std::string alt_conf = "";
+   if (asc.mol) {
+      int imod = 1;
+      mmdb::Model *model_p = asc.mol->GetModel(imod);
+      if (model_p) {
+         int n_chains = model_p->GetNumberOfChains();
+         for (int ichain=0; ichain<n_chains; ichain++) {
+            mmdb::Chain *chain_p = model_p->GetChain(ichain);
+            int n_res = chain_p->GetNumberOfResidues();
+            for (int ires=0; ires<n_res; ires++) {
+               mmdb::Residue *residue_p = chain_p->GetResidue(ires);
+               if (residue_p) {
+                  std::string res_name = residue_p->GetResName();
+                  if (std::find(base_names.begin(), base_names.end(), res_name) != base_names.end()) {
+                     mmdb::Atom *at_O4_prime = nullptr;
+                     mmdb::Atom *at_C1_prime = nullptr;
+                     mmdb::Atom *at_C2_prime = nullptr;
+                     mmdb::Atom *at_C3_prime = nullptr;
+                     mmdb::Atom *at_C4_prime = nullptr;
+                     int n_atoms = residue_p->GetNumberOfAtoms();
+                     for (int iat=0; iat<n_atoms; iat++) {
+                        mmdb::Atom *at = residue_p->GetAtom(iat);
+                        if (! at->isTer()) {
+                           std::string atom_name = at->GetAtomName();
+                           if (atom_name == " O4'") at_O4_prime = at;
+                           if (atom_name == " C1'") at_C1_prime = at;
+                           if (atom_name == " C2'") at_C2_prime = at;
+                           if (atom_name == " C3'") at_C3_prime = at;
+                           if (atom_name == " C4'") at_C4_prime = at;
+                        }
+                     }
+                     if (at_O4_prime && at_C1_prime && at_C2_prime && at_C3_prime && at_C4_prime) {
+                        coot::atom_quad aq_1(at_O4_prime, at_C1_prime, at_C2_prime, at_C3_prime);
+                        coot::atom_quad aq_2(at_C1_prime, at_C2_prime, at_C3_prime, at_C4_prime);
+                        coot::atom_quad aq_3(at_C2_prime, at_C3_prime, at_C4_prime, at_O4_prime);
+                        coot::atom_quad aq_4(at_C3_prime, at_C4_prime, at_O4_prime, at_C1_prime);
+                        coot::atom_quad aq_5(at_C4_prime, at_O4_prime, at_C1_prime, at_C2_prime);
+
+                        double t1 = aq_1.torsion();
+                        double t2 = aq_2.torsion();
+                        double t3 = aq_3.torsion();
+                        double t4 = aq_4.torsion();
+                        double t5 = aq_5.torsion();
+
+                        coot::pucker_analysis_info_t pi(residue_p, alt_conf);
+
+                        std::cout << "puckered-atom" << pi.puckered_atom() << " torsions: "
+                                  << std::setw(9) << t1 << " " << std::setw(9) << t2 << " "
+                                  << std::setw(9) << t3 << " " << std::setw(9) << t4 << " "
+                                  << std::setw(9) << t5 << std::endl;
+                     }
+                  }
+               }
+            }
+         }
+      }
+   }
+   return status;
+}
+
+
 int main(int argc, char **argv) {
 
    mmdb::InitMatType();
 
    if (true)
+      test_ribose_torsions(argc, argv);
+
+   if (false)
+      test_cremer_pople(argc, argv);
+
+   if (false)
+      test_make_mask_map(argc, argv);
+
+   if (false)
+      test_partition_map_by_chain(argc, argv);
+
+   if (false)
       test_dictionary_conformers(argc, argv);
 
    if (false)

@@ -41,7 +41,7 @@
 
 #include <string>
 
-#include "coords/Cartesian.h"
+#include "coords/Cartesian.hh"
 // Clipper stuff
 #include "clipper/core/xmap.h"
 #include "clipper/core/nxmap.h"
@@ -92,7 +92,9 @@ public:
 				      T tIsoLevel,
 				      float box_radius, // half length
 				      coot::Cartesian centre_point,
-				      int isample_step, int iream_start, int n_reams, bool is_em_map);
+				      int isample_step, int iream_start, int n_reams,
+                                      bool is_em_map,
+                                      bool use_vertex_gradients_for_map_normals_flag);
 
 	std::pair<int, int> rangeify(const clipper::Grid_map &grid, int isample_step, int isection_start,
 				     int n_sections) const;

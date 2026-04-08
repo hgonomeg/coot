@@ -421,7 +421,7 @@ void TransformManager::apply_current_transform_state(impl::WidgetCoreData* widge
     const TranslationState* tr = std::get_if<TranslationState>(&this->state);
     if(tr) {
         auto [offset_x,offset_y] = tr->get_current_offset();
-        mol.apply_canvas_translation(offset_x, offset_y);
+        mol.apply_canvas_translation(offset_x, offset_y, widget_data->scale);
         return;
     }
 }
@@ -546,6 +546,30 @@ std::string ElementInsertion::get_exception_message_prefix() const noexcept {
     return "Could not insert atom: ";
 }
 
+void ElementInsertion::on_blank_space_click(ClickContext& ctx, int x, int y) {
+    g_debug("The click could not be resolved to any atom or bond.");
+    // This 'if' should be removed once we implement merging molecules
+    if(ctx.widget_data.get_molecule_count_impl() == 0) {
+        g_debug("There are no molecules. Element insertion will therefore create a new one.");
+        auto rdkit_mol = std::make_shared<RDKit::RWMol>();
+        rdkit_mol->addAtom(new RDKit::Atom(this->get_atomic_number()),false,true);
+        RDKit::MolOps::sanitizeMol(*rdkit_mol);
+        // append_molecule() already calls begin_edition() and finalize_edition()
+        // ctx.widget_data.begin_edition();
+        #ifndef __EMSCRIPTEN__
+        auto* widget_ptr = static_cast<impl::CootLigandEditorCanvasPriv*>(&ctx.widget_data);
+        coot_ligand_editor_canvas_append_molecule(COOT_COOT_LIGAND_EDITOR_CANVAS(widget_ptr), rdkit_mol);
+        #else // __EMSCRIPTEN__ defined
+        // Lhasa-specific includes/definitions
+        auto* widget_ptr = static_cast<::CootLigandEditorCanvas*>(&ctx.widget_data);
+        coot_ligand_editor_canvas_append_molecule(widget_ptr, rdkit_mol);
+        #endif
+        ctx.widget_data.update_status("New molecule created from an atom.");
+    } else {
+        g_debug("There are already molecules. Element insertion on blank space is a no-op.");
+    }
+}
+
 bool BondModifier::on_molecule_click(MoleculeClickContext& ctx) {
     ctx.widget_data.begin_edition();
     return true;
@@ -577,6 +601,33 @@ void BondModifier::on_atom_click(MoleculeClickContext& ctx, CanvasMolecule::Atom
 
 std::string BondModifier::get_exception_message_prefix() const noexcept {
     return "Could not alter/create bond: ";
+}
+
+void BondModifier::on_blank_space_click(ClickContext& ctx, int x, int y) {
+    g_debug("The click could not be resolved to any atom or bond.");
+    // This 'if' should be removed once we implement merging molecules
+    if(ctx.widget_data.get_molecule_count_impl() == 0) {
+        g_debug("There are no molecules. Element insertion will therefore create a new one.");
+        auto rdkit_mol = std::make_shared<RDKit::RWMol>();
+        auto first_carbon_idx = rdkit_mol->addAtom(new RDKit::Atom(6),false,true);
+        auto second_carbon_idx = rdkit_mol->addAtom(new RDKit::Atom(6),false,true);
+        rdkit_mol->addBond(first_carbon_idx,second_carbon_idx,CanvasMolecule::bond_type_to_rdkit(this->get_target_bond_type()));
+        // This theoretically may throw but it has no reason to as we just created a valid molecule
+        RDKit::MolOps::sanitizeMol(*rdkit_mol);
+        // append_molecule() already calls begin_edition() and finalize_edition()
+        // ctx.widget_data.begin_edition();
+        #ifndef __EMSCRIPTEN__
+        auto* widget_ptr = static_cast<impl::CootLigandEditorCanvasPriv*>(&ctx.widget_data);
+        coot_ligand_editor_canvas_append_molecule(COOT_COOT_LIGAND_EDITOR_CANVAS(widget_ptr), rdkit_mol);
+        #else // __EMSCRIPTEN__ defined
+        // Lhasa-specific includes/definitions
+        auto* widget_ptr = static_cast<::CootLigandEditorCanvas*>(&ctx.widget_data);
+        coot_ligand_editor_canvas_append_molecule(widget_ptr, rdkit_mol);
+        #endif
+        ctx.widget_data.update_status("New molecule created from an atom.");
+    } else {
+        g_debug("There are already molecules. Element insertion on blank space is a no-op.");
+    }
 }
 
 bool ActiveTool::is_creating_bond() const noexcept {
@@ -647,11 +698,15 @@ void GeometryModifier::on_bond_click(MoleculeClickContext& ctx, CanvasMolecule::
 
     auto bond_geometry = CanvasMolecule::bond_geometry_from_rdkit(rdkit_bond->getBondDir());
     auto new_bond_geometry = CanvasMolecule::cycle_bond_geometry(bond_geometry);
-    g_debug("Target bond geometry: %u",static_cast<unsigned int>(new_bond_geometry));
+    g_debug("Original bond geometry: %u, New bond geometry: %u", static_cast<unsigned int>(bond_geometry), static_cast<unsigned int>(new_bond_geometry));
     rdkit_bond->setBondDir(CanvasMolecule::bond_geometry_to_rdkit(new_bond_geometry));
 
+    // Now we need to go from bond direction info to chirality info, somehow.
+    RDKit::MolOps::assignChiralTypesFromBondDirs(*ctx.rdkit_mol.get());
+    RDKit::MolOps::assignStereochemistry(*ctx.rdkit_mol.get(), true, true); // full stereo perception + CIP labels
+
     ctx.widget_data.update_status("Geometry of bond has been altered.");
-    ctx.canvas_mol.lower_from_rdkit(!ctx.widget_data.allow_invalid_molecules);
+    ctx.canvas_mol.lower_from_rdkit(!ctx.widget_data.allow_invalid_molecules, true, true);
     g_debug("Final bond geometry: %u",static_cast<unsigned int>(CanvasMolecule::bond_geometry_from_rdkit(rdkit_bond->getBondDir())));
     ctx.widget_data.finalize_edition();
 }
@@ -761,6 +816,13 @@ DeleteTool::ListOfAtomsOrBonds DeleteTool::trace_chain_impl(const RDKit::ROMol* 
     return ret;
 }
 
+bool DeleteTool::chain_contains_majority_of_atoms(const  ListOfAtomsOrBonds& chain, const RDKit::ROMol* mol) {
+    unsigned int no_atoms = std::count_if(chain.cbegin(), chain.cend(), [](const AtomOrBond& el){
+        return std::holds_alternative<unsigned int>(el);
+    });
+    return no_atoms >= mol->getNumAtoms() / 2;
+}
+
 DeleteTool::ListOfAtomsOrBonds DeleteTool::trace_rchain(const MoleculeClickContext& ctx, const CanvasMolecule::Atom& atom) {
     RDKit::Atom const* rdatom = ctx.rdkit_mol->getAtomWithIdx(atom.idx);
     const RDKit::ROMol* mol = ctx.rdkit_mol.get();
@@ -798,8 +860,10 @@ DeleteTool::ListOfAtomsOrBonds DeleteTool::trace_rchain(const MoleculeClickConte
         return a.size() < b.size();
     });
     if(it != branches.end()) {
-        // Append the smallest branch to our result
-        ret.insert(ret.end(), it->begin(), it->end());
+        if(!chain_contains_majority_of_atoms(*it, mol)) {
+            // Append the smallest branch to our result
+            ret.insert(ret.end(), it->begin(), it->end());
+        }
     }
     return ret;
 }
@@ -822,10 +886,10 @@ DeleteTool::ListOfAtomsOrBonds DeleteTool::trace_rchain(const MoleculeClickConte
 
     auto case1 = trace_chain_impl(mol, processed_atoms1, mol->getAtomWithIdx(bond.first_atom_idx));
     auto case2 = trace_chain_impl(mol, processed_atoms2, mol->getAtomWithIdx(bond.second_atom_idx));
-
-    if(case1.size() <= case2.size()) {
+    
+    if(case1.size() <= case2.size() && ! chain_contains_majority_of_atoms(case1, mol)) {
         ret.insert(ret.end(), case1.begin(), case1.end());
-    } else {
+    } else if(! chain_contains_majority_of_atoms(case2, mol)) {
         ret.insert(ret.end(), case2.begin(), case2.end());
     }
 
@@ -839,7 +903,7 @@ bool DeleteTool::on_hover(ClickContext& ctx, int x, int y) {
 bool DeleteTool::on_molecule_hover(MoleculeClickContext& ctx) {
     if(ctx.control_pressed && !ctx.alt_pressed) {
         // Highlight whole molecule for deletion
-        for(auto i = 0; i < ctx.rdkit_mol->getNumAtoms(); i++) {
+        for(unsigned int i = 0; i < ctx.rdkit_mol->getNumAtoms(); i++) {
             ctx.canvas_mol.add_atom_highlight(i, CanvasMolecule::HighlightType::Hover);
         }
         ctx.canvas_mol.add_highlight_to_all_bonds(CanvasMolecule::HighlightType::Hover);
@@ -1108,6 +1172,7 @@ std::string StructureInsertion::get_exception_message_prefix() const noexcept {
 
 void StructureInsertion::on_blank_space_click(ClickContext& ctx, int x, int y) {
     g_debug("The click could not be resolved to any atom or bond.");
+    // This 'if' should be removed once we implement merging molecules
     if(ctx.widget_data.get_molecule_count_impl() == 0) {
         g_debug("There are no molecules. Structure insertion will therefore create a new one.");
         auto rdkit_mol = std::make_shared<RDKit::RWMol>();
@@ -1129,6 +1194,8 @@ void StructureInsertion::on_blank_space_click(ClickContext& ctx, int x, int y) {
         
         ctx.widget_data.update_status("New molecule created from carbon ring.");
         // todo: make sure that this is crash-safe vs edit/undo
+    } else {
+        g_debug("There are already molecules. Structure insertion on blank space is a no-op.");
     }
 }
 

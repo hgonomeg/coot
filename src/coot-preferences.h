@@ -52,7 +52,7 @@
 #define PREFERENCES_SMOOTH_SCROLL_STEPS           18
 #define PREFERENCES_SMOOTH_SCROLL_LIMIT           19
 #define PREFERENCES_MAP_DRAG                      20
-#define PREFERENCES_MARK_CIS_BAD                  21
+// #define PREFERENCES_MARK_CIS_BAD                  21
 #define PREFERENCES_DEFAULT_B_FACTOR              43
 #define PREFERENCES_BG_COLOUR                     22
 #define PREFERENCES_ANTIALIAS                     23
@@ -78,6 +78,7 @@
                                                      //         0: no
                                                      //         1: yes
 #define PREFERENCES_VIEW_ROTATION_MOUSE_BUTTON    44
+#define PREFERENCES_PHYSICS                       45
 
 #define MODEL_TOOLBAR                              0
 #define MAIN_TOOLBAR                               1

@@ -61,6 +61,8 @@ target_sources(lh PRIVATE
   ../layla/ligand_editor_canvas/core.cpp
   ../layla/ligand_editor_canvas/model.hpp
   ../layla/ligand_editor_canvas/model.cpp
+  ../layla/ligand_editor_canvas/model/coord_loader.hpp
+  ../layla/ligand_editor_canvas/model/coord_loader.cpp
   ../layla/ligand_editor_canvas/tools.hpp
   ../layla/ligand_editor_canvas/tools.cpp
   ../layla/ligand_editor_canvas/render.hpp
@@ -76,7 +78,7 @@ set_target_properties(lhasa PROPERTIES LINK_FLAGS " -s ENVIRONMENT=web,worker -s
 
 target_link_libraries(lhasa PRIVATE 
     RDKitDepictor 
-    RDKitcoordgen
+    coordgen
     RDKitMolTransforms
     RDKitSmilesParse 
     RDKitMolDraw2D 
@@ -97,6 +99,8 @@ target_link_libraries(lhasa PRIVATE
     RDKitDataStructs
     boost_iostreams 
     boost_serialization
+    gemmi_cpp
+    maeparser
     ${DEPS_LIBRARIES}
     lh
 )

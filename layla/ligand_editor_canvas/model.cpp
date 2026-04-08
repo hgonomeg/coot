@@ -36,6 +36,8 @@
 #include <rdkit/Geometry/point.h>
 #include <GraphMol/Chirality.h>
 #include <rdkit/GraphMol/MolOps.h>
+#include <rdkit/GraphMol/Conformer.h>
+#include <rdkit/GraphMol/CoordGen.h>
 #include <cmath>
 #include <boost/range/iterator_range.hpp>
 #include <string>
@@ -81,6 +83,10 @@ std::optional<DisplayMode> coot::ligand_editor_canvas::display_mode_from_string(
     } else {
         return std::nullopt;
     }
+}
+
+void CanvasMolecule::set_coordgen_enabled(bool value) noexcept {
+    this->use_coordgen = value;
 }
 
 CanvasMolecule::MaybeAtomOrBond CanvasMolecule::resolve_click(int x, int y, float canvas_scale) const noexcept {
@@ -364,7 +370,8 @@ void CanvasMolecule::draw(impl::Renderer& ren, DisplayMode display_mode, const s
     renctx.draw_bonds();
 }
 
-CanvasMolecule::CanvasMolecule(std::shared_ptr<RDKit::RWMol> rdkit_mol, bool allow_invalid_mol) {
+CanvasMolecule::CanvasMolecule(std::shared_ptr<RDKit::RWMol> rdkit_mol, bool allow_invalid_mol, bool use_coordgen) {
+    this->use_coordgen = use_coordgen;
     this->rdkit_molecule = std::move(rdkit_mol);
     this->cached_atom_coordinate_map = std::nullopt;
     this->bounding_atom_coords = std::make_pair(RDGeom::Point2D(0,0),RDGeom::Point2D(0,0));
@@ -552,12 +559,26 @@ RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry(bool omit_ster
         g_info("Computing fresh 2D coords (without previous reference).");
     }
 
+    int conformer_id = -1;
+
     try {
-        RDDepict::compute2DCoords(*this->rdkit_molecule,previous_coordinate_map,true,true);
+        if(this->use_coordgen) {
+            auto params = RDKit::CoordGen::defaultParams;
+            // params.templateMol = this->rdkit_molecule.get();
+            params.dbg_useConstrained = true;
+            params.dbg_useFixed = true;
+            if(previous_coordinate_map) {
+                g_warning("TODO: Fix molecules flying around with Coordgen");
+                params.coordMap = *previous_coordinate_map;
+            }
+            conformer_id = RDKit::CoordGen::addCoords(*this->rdkit_molecule.get(), &params);
+        } else {
+            conformer_id = RDDepict::compute2DCoords(*this->rdkit_molecule, previous_coordinate_map, true, true);
+        }
+        g_debug("Conformer ID=%i %s", conformer_id, use_coordgen ? "(coordgen)" : "(RDDepict)");
     } catch(std::exception& e) {
         throw std::runtime_error(std::string("Failed to compute 2D coords with RDKit! ")+e.what());
     }
-
 
     RDKit::MatchVectType matchVect;
     if(!RDKit::SubstructMatch(*this->rdkit_molecule, *this->rdkit_molecule, matchVect)) {
@@ -567,7 +588,7 @@ RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry(bool omit_ster
     // Maps atom indices to 2D points
     RDGeom::INT_POINT2D_MAP coordinate_map;
 
-    RDKit::Conformer& conf = this->rdkit_molecule->getConformer();
+    RDKit::Conformer& conf = this->rdkit_molecule->getConformer(conformer_id);
 
     if(!omit_stereochemistry) {
         // I think this what needs to be called to assign bond directions (wedges and dashes) based on
@@ -580,9 +601,6 @@ RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry(bool omit_ster
         RDGeom::Point2D pt2( pt3.x , pt3.y );
         coordinate_map[mv.second] = pt2;
     }
-    // what is going on here?
-    // That doesn't seem to change much
-    // RDDepict::compute2DCoords( *this->rdkit_molecule, &coordinate_map, true, true);
 
     if(coordinate_map.empty()) {
         throw std::runtime_error("RDKit coordinate mapping is empty");

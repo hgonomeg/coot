@@ -26,6 +26,7 @@
 #include <variant>
 #include <optional>
 #include <rdkit/GraphMol/RWMol.h>
+#include "model/coord_loader.hpp"
 // Forward declaration of types defined at "render.hpp"
 namespace coot::ligand_editor_canvas::impl {
     struct Renderer;
@@ -240,6 +241,10 @@ class CanvasMolecule {
     /// Has to be multiplied by scale and viewport offset must be added to get on-screen coordinates
     float y_canvas_translation;
 
+    /// Determines if libcoordgen is to be used for determining atom coordinates.
+    /// Uses RDDepict if false
+    bool use_coordgen;
+
     /// The top-left and bottom-right points, in between which the molecule lies.
     /// The coordinates are in "RDKit space".
     /// They have to be multiplied by scale and added to the offsets to get on-screen coordinates
@@ -291,7 +296,7 @@ class CanvasMolecule {
 
     public:
 
-    CanvasMolecule(std::shared_ptr<RDKit::RWMol> rdkit_mol, bool allow_invalid_mol);
+    CanvasMolecule(std::shared_ptr<RDKit::RWMol> rdkit_mol, bool allow_invalid_mol, bool use_coordgen);
 
     /// Replaces the inner shared_ptr to the molecule
     /// from which the CanvasMolecule is lowered.
@@ -318,6 +323,9 @@ class CanvasMolecule {
     /// Updates the `cached_atom_coordinate_map` after an atom has been removed
     /// in such a way as to prevent the cached molecule geometry from being broken
     void update_cached_atom_coordinate_map_after_atom_removal(unsigned int removed_atom_idx);
+
+    /// Updates `use_coordgen` setting.
+    void set_coordgen_enabled(bool value) noexcept;
 
     void apply_canvas_translation(int delta_x, int delta_y, float scale) noexcept;
     std::pair<float,float> get_on_screen_coords(float x, float y, const std::pair<int, int>& viewport_offset, float scale) const noexcept;

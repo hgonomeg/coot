@@ -36,6 +36,8 @@
 #include <rdkit/Geometry/point.h>
 #include <GraphMol/Chirality.h>
 #include <rdkit/GraphMol/MolOps.h>
+#include <rdkit/GraphMol/Conformer.h>
+#include <rdkit/GraphMol/CoordGen.h>
 #include <cmath>
 #include <boost/range/iterator_range.hpp>
 #include <string>
@@ -364,11 +366,11 @@ void CanvasMolecule::draw(impl::Renderer& ren, DisplayMode display_mode, const s
     renctx.draw_bonds();
 }
 
-CanvasMolecule::CanvasMolecule(std::shared_ptr<RDKit::RWMol> rdkit_mol, bool allow_invalid_mol) {
+CanvasMolecule::CanvasMolecule(std::shared_ptr<RDKit::RWMol> rdkit_mol, bool allow_invalid_mol, bool use_coordgen) {
     this->rdkit_molecule = std::move(rdkit_mol);
     this->cached_atom_coordinate_map = std::nullopt;
     this->bounding_atom_coords = std::make_pair(RDGeom::Point2D(0,0),RDGeom::Point2D(0,0));
-    this->lower_from_rdkit(!allow_invalid_mol);
+    this->lower_from_rdkit(!allow_invalid_mol, use_coordgen);
     this->x_canvas_translation = 0;
     this->y_canvas_translation = 0;
 }
@@ -516,7 +518,7 @@ RDKit::Bond::BondType CanvasMolecule::bond_type_to_rdkit(CanvasMolecule::BondTyp
 }
 
 
-RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry(bool omit_stereochemistry) const {
+RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry(bool omit_stereochemistry, bool use_coordgen) const {
     // The following code is heavily based on RDKit documentation.
 
     const RDGeom::INT_POINT2D_MAP* previous_coordinate_map = nullptr;
@@ -552,12 +554,27 @@ RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry(bool omit_ster
         g_info("Computing fresh 2D coords (without previous reference).");
     }
 
+    int conformer_id = -1;
+
     try {
-        RDDepict::compute2DCoords(*this->rdkit_molecule,previous_coordinate_map,true,true);
+        if(use_coordgen) {
+            auto params = RDKit::CoordGen::defaultParams;
+            params.dbg_useConstrained = true;
+            params.dbg_useFixed = true;
+            // Match RDDepict's bond length (1.5 units).
+            // Coordgen uses ~50 internal units, so 50/1.5 = 33.33
+            params.coordgenScaling = 100.0 / 3.0;
+            if(previous_coordinate_map) {
+                params.coordMap = *previous_coordinate_map;
+            }
+            conformer_id = RDKit::CoordGen::addCoords(*this->rdkit_molecule.get(), &params);
+        } else {
+            conformer_id = RDDepict::compute2DCoords(*this->rdkit_molecule, previous_coordinate_map, true, true);
+        }
+        g_debug("Conformer ID=%i %s", conformer_id, use_coordgen ? "(coordgen)" : "(RDDepict)");
     } catch(std::exception& e) {
         throw std::runtime_error(std::string("Failed to compute 2D coords with RDKit! ")+e.what());
     }
-
 
     RDKit::MatchVectType matchVect;
     if(!RDKit::SubstructMatch(*this->rdkit_molecule, *this->rdkit_molecule, matchVect)) {
@@ -567,7 +584,7 @@ RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry(bool omit_ster
     // Maps atom indices to 2D points
     RDGeom::INT_POINT2D_MAP coordinate_map;
 
-    RDKit::Conformer& conf = this->rdkit_molecule->getConformer();
+    RDKit::Conformer& conf = this->rdkit_molecule->getConformer(conformer_id);
 
     if(!omit_stereochemistry) {
         // I think this what needs to be called to assign bond directions (wedges and dashes) based on
@@ -580,9 +597,6 @@ RDGeom::INT_POINT2D_MAP CanvasMolecule::compute_molecule_geometry(bool omit_ster
         RDGeom::Point2D pt2( pt3.x , pt3.y );
         coordinate_map[mv.second] = pt2;
     }
-    // what is going on here?
-    // That doesn't seem to change much
-    // RDDepict::compute2DCoords( *this->rdkit_molecule, &coordinate_map, true, true);
 
     if(coordinate_map.empty()) {
         throw std::runtime_error("RDKit coordinate mapping is empty");
@@ -993,7 +1007,10 @@ void CanvasMolecule::build_internal_molecule_representation(const RDGeom::INT_PO
     this->shorten_double_bonds();
 }
 
-void CanvasMolecule::lower_from_rdkit(bool sanitize_after, bool with_qed, bool omit_stereochemistry_processing) {
+void CanvasMolecule::lower_from_rdkit(bool sanitize_after, bool use_coordgen, const LoweringOptions& options) {
+
+    bool omit_stereochemistry_processing = options.omit_stereochemistry_processing;
+    bool with_qed = options.with_qed;
 
     // 2. Do the lowering
 
@@ -1009,7 +1026,7 @@ void CanvasMolecule::lower_from_rdkit(bool sanitize_after, bool with_qed, bool o
     }
 
     /// 2.1 Compute geometry
-    auto geometry = this->compute_molecule_geometry(omit_stereochemistry_processing);
+    auto geometry = this->compute_molecule_geometry(omit_stereochemistry_processing, use_coordgen);
 
     // 2.2 Build internal repr
     this->build_internal_molecule_representation(geometry);
@@ -1188,4 +1205,10 @@ void CanvasMolecule::update_cached_atom_coordinate_map_after_atom_removal(unsign
             coordinate_map.emplace(x.first,x.second);
         }
     }
+}
+
+CanvasMolecule::LoweringOptions::LoweringOptions() noexcept
+ :with_qed(true), omit_stereochemistry_processing(false)
+{
+
 }

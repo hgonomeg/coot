@@ -2251,6 +2251,7 @@ void handle_get_accession_code(GtkWidget *frame, GtkWidget *entry) {
    };
 
    const gchar *text_c = gtk_editable_get_text(GTK_EDITABLE(entry));
+   bool do_message = true;
 
    if (! text_c) {
       std::cout << "WARNING:: handle_get_accession_code no text " << std::endl;
@@ -2263,6 +2264,7 @@ void handle_get_accession_code(GtkWidget *frame, GtkWidget *entry) {
       std::cout << "DEBUG:: extracted accession code handle mode n " << n << std::endl;
       if (n == COOT_EMDB_CODE) {
          fetch_emdb_map(text);
+         do_message = false;
       } else {
          if (n == COOT_COD_CODE) {
 #ifdef USE_LIBCURL
@@ -2273,7 +2275,8 @@ void handle_get_accession_code(GtkWidget *frame, GtkWidget *entry) {
          }
       }
    }
-   graphics_info_t::ephemeral_overlay_label("Press U to return to previous centre");
+   if (do_message)
+      graphics_info_t::ephemeral_overlay_label("Press U to return to previous centre");
    // and hide the accession code window
    gtk_widget_set_visible(frame, FALSE);
 }
@@ -2474,7 +2477,6 @@ void toggle_environment_show_distances(GtkCheckButton *button) {
    graphics_info_t g;
 
    GtkWidget *hbox                    = widget_from_builder("environment_distance_distances_frame");
-   GtkWidget *distance_type_frame     = widget_from_builder("environment_distances_type_selection");
    GtkWidget *label_atom_check_button = widget_from_builder("environment_distance_label_atom_checkbutton");
 
    if (gtk_check_button_get_active(button)) {
@@ -2482,7 +2484,6 @@ void toggle_environment_show_distances(GtkCheckButton *button) {
       g.environment_show_distances = 1;
       gtk_widget_set_sensitive(hbox, TRUE);
       gtk_widget_set_sensitive(label_atom_check_button, TRUE);
-      gtk_widget_set_sensitive(distance_type_frame, TRUE);
 
       std::pair<int, int> r = g.get_closest_atom();
       if (r.first >= 0) {
@@ -2492,10 +2493,8 @@ void toggle_environment_show_distances(GtkCheckButton *button) {
       }
 
    } else {
-      // std::cout << "toggled evironment distances off" << std::endl;
       g.environment_show_distances = 0;
       gtk_widget_set_sensitive(hbox, FALSE);
-      gtk_widget_set_sensitive(distance_type_frame, FALSE);
       graphics_draw();
       // gtk_widget_set_sensitive(label_atom_check_button, FALSE); // keep it always active
    }
@@ -3309,6 +3308,9 @@ void close_molecule(int imol) {
    g.clear_up_moving_atoms_maybe(imol);
    g.update_scroll_wheel_map_on_molecule_close();
 
+   graphics_info_t::refresh_ramachandran_plot_model_list();
+   graphics_info_t::refresh_validation_graph_model_list();
+
    graphics_draw();
    std::string cmd = "close-molecule";
    std::vector<coot::command_arg_t> args;
@@ -3676,6 +3678,21 @@ void set_map_hexcolour(int imol, const char *hex_colour) {
    coot::colour_holder ch(hex_colour);
    set_map_colour(imol, ch.red, ch.green, ch.blue);
 
+}
+
+void brighten_maps() {
+
+   graphics_info_t g;
+   auto map_list = g.get_map_molecule_vector();
+   for (unsigned int i=0; i<map_list.size(); i++) {
+      const auto &imol = map_list[i];
+      float rc = graphics_info_t::molecules[imol].map_colour.red;
+      float gc = graphics_info_t::molecules[imol].map_colour.green;
+      float bc = graphics_info_t::molecules[imol].map_colour.blue;
+      float fac = 1.25;
+      set_map_colour(imol, rc * fac, gc * fac, bc * fac);
+   }
+   g.graphics_draw();
 }
 
 

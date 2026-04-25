@@ -5,14 +5,12 @@ lib_LTLIBRARIES=libcoot-layla.la
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir)         \
-	$(CLIPPER_CXXFLAGS)     \
 	$(RDKIT_CXXFLAGS)       \
-        $(BOOST_CPPFLAGS)       \
-	-DUSE_PYTHON=1 $(PYTHON_CPPFLAGS)      \
+    $(BOOST_CPPFLAGS)       \
 	$(GTK_CFLAGS)           \
 	$(GLIB_CFLAGS)          \
-	-DUSE_LIBCURL=1 $(CURL_CFLAGS)          \
-	$(MMDB_CXXFLAGS)
+	$(GEMMI_CXXFLAGS)       \
+	-DUSE_LIBCURL=1 $(CURL_CFLAGS)          
 
 # needed? test make dist
 #  EXTRA_DIST = layla.ui
@@ -31,6 +29,7 @@ pkginclude_HEADERS = \
 	qed.hpp \
 	ligand_editor_canvas/core.hpp  \
 	ligand_editor_canvas/model.hpp \
+	ligand_editor_canvas/model/coord_loader.hpp \
 	ligand_editor_canvas/tools.hpp \
 	ligand_editor_canvas/render.hpp \
 	ligand_editor_canvas.hpp \
@@ -51,6 +50,7 @@ libcoot_layla_la_SOURCES = \
 	ligand_editor_canvas/core.cpp \
 	ligand_editor_canvas.cpp \
 	ligand_editor_canvas/model.cpp \
+	ligand_editor_canvas/model/coord_loader.cpp \
 	ligand_editor_canvas/tools.cpp \
 	ligand_editor_canvas/render.cpp \
 	python_utils.cpp
@@ -60,6 +60,7 @@ libcoot_layla_la_LIBADD = $(top_builddir)/geometry/libcoot-geometry.la \
                           $(top_builddir)/utils/libcoot-utils.la \
                           $(GTK_LIBS) $(GLIB_LIBS) \
                           $(RDKIT_LIBS) $(CURL_LIBS) \
+						  $(GEMMI_LIBS) \
                           -lpthread
 
 libcoot_layla_la_LDFLAGS = $(SHARED_LDFLAGS)

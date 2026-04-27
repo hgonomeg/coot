@@ -238,8 +238,7 @@ startup_realize(GtkWidget *gl_area) {
                 << std::endl;
 
    auto run_command_line_scripts_callback = +[] (gpointer user_data) {
-
-      // run_command_line_scripts();
+      run_command_line_scripts();
       return G_SOURCE_REMOVE;
    };
    g_idle_add(run_command_line_scripts_callback, nullptr);
@@ -944,7 +943,7 @@ startup_application_activate(GtkApplication *application,
       // change "glade" to "ui" one day.
       // 20240218-PE today is that day!
       std::string dir_ui = coot::util::append_dir_dir(dir, "ui");
-      std::string ui_file_name = "coot-gtk4.ui";
+      std::string ui_file_name = "coot.ui";
       std::string ui_file_full = coot::util::append_dir_file(dir_ui, ui_file_name);
       if (coot::file_exists(ui_file_name))
          ui_file_full = ui_file_name;
@@ -985,7 +984,7 @@ startup_application_activate(GtkApplication *application,
             version_str += s;
          }
       }
-      // override the value in the coot-gtk4.ui file.
+      // override the value in the coot.ui file.
       gtk_about_dialog_set_version(GTK_ABOUT_DIALOG(about_dialog), version_str.c_str());
 
 
@@ -1082,10 +1081,33 @@ startup_application_activate(GtkApplication *application,
             GFile *file = (GFile *)g_value_get_object(value);
             if (file) {
                std::cout << "DEBUG:: got file: " << file << std::endl;
-               const gchar *filename = g_file_get_path(file);
-               std::cout << "DEBUG:: got filename: " << filename << std::endl;
-               handle_drag_and_drop_string(filename);
-               status = TRUE;
+               gchar *filename = g_file_get_path(file);
+               if (filename) {
+                  std::cout << "DEBUG:: got filename: " << filename << std::endl;
+                  handle_drag_and_drop_string(filename);
+                  status = TRUE;
+                  g_free(filename);
+               } else {
+                  // macOS GTK4 sometimes gives a GFile built from an already-URI
+                  // string, so the colon gets re-encoded (file%3A///...). Unescape
+                  // and strip the file:// prefix to recover the local path.
+                  gchar *uri = g_file_get_uri(file);
+                  std::cout << "DEBUG:: g_file_get_path() returned null; uri: "
+                            << (uri ? uri : "(null)") << std::endl;
+                  if (uri) {
+                     gchar *unescaped = g_uri_unescape_string(uri, NULL);
+                     if (unescaped) {
+                        const gchar *path = unescaped;
+                        if (g_str_has_prefix(path, "file://"))
+                           path += strlen("file://");
+                        std::cout << "DEBUG:: recovered path: " << path << std::endl;
+                        handle_drag_and_drop_string(path);
+                        status = TRUE;
+                        g_free(unescaped);
+                     }
+                     g_free(uri);
+                  }
+               }
             } else {
                std::cout << "got null file " << std::endl;
             }

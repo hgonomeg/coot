@@ -733,6 +733,21 @@
             <attribute name="action">app.go_to_atom_action</attribute>
           </item>
           <item>
+            <attribute name="label">Map Parameters...</attribute>
+            <attribute name="action">app.map_parameters_action</attribute>
+          </item>
+          <item>
+            <attribute name="label">Molecular Surface</attribute>
+            <attribute name="action">app.molecular_surface_action</attribute>
+          </item>
+          <item>
+            <attribute name="label">NCS Ghost Control...</attribute>
+            <attribute name="action">app.ghost_control_action</attribute>
+          </item>
+        </section>
+
+        <section>
+          <item>
             <attribute name="label">Label Atoms in Residue</attribute>
             <attribute name="action">app.label_atoms_in_residue_action</attribute>
           </item>
@@ -745,16 +760,8 @@
             <attribute name="action">app.label_neighbours_action</attribute>
           </item>
           <item>
-            <attribute name="label">Map Parameters...</attribute>
-            <attribute name="action">app.map_parameters_action</attribute>
-          </item>
-          <item>
-            <attribute name="label">Molecular Surface</attribute>
-            <attribute name="action">app.molecular_surface_action</attribute>
-          </item>
-          <item>
-            <attribute name="label">NCS Ghost Control...</attribute>
-            <attribute name="action">app.ghost_control_action</attribute>
+            <attribute name="label">Clear Atom Labels</attribute>
+            <attribute name="action">app.clear_atom_labels_action</attribute>
           </item>
         </section>
 
@@ -824,10 +831,6 @@
     <submenu>
       <attribute name="label">Measures</attribute>
       <section>
-        <item>
-          <attribute name="label">Clear Atom Labels</attribute>
-          <attribute name="action">app.clear_atom_labels_action</attribute>
-        </item>
         <item>
           <attribute name="label">Distances &amp; Angles...</attribute>
           <attribute name="action">app.distances_and_angles_action</attribute>
@@ -4883,7 +4886,7 @@ that you wish to delete.               </property>
     </child>
   </object>
 
-  <object class="GtkDialog" id="environment_distance_dialog">
+  <object class="GtkDialog" id="environment_distances_dialog">
     <property name="title" translatable="yes">Coot Environment Distances</property>
     <child>
       <object class="GtkBox" id="dialog-vbox11">
@@ -6970,7 +6973,7 @@ Do you want to continue?
                 <property name="orientation">horizontal</property>
 
                 <child>
-                  <object class="GtkPaned" id="main_window_ramchandran_and_validation_pane">
+                  <object class="GtkPaned" id="main_window_ramachandran_and_validation_pane">
                     <property name="position">111</property>
                     <property name="visible">False</property>
                     <property name="orientation">vertical</property>
@@ -9713,6 +9716,44 @@ Do you want to continue?
                             <signal name="clicked" handler="on_emdb_map_code_get_it_button_clicked" swapped="no"/>
                           </object>
                         </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <child type="overlay">
+              <object class="GtkFrame" id="download-emdb-map-frame">
+                <property name="halign">center</property>
+                <property name="valign">start</property>
+                <property name="visible">False</property>
+                <property name="margin-bottom">5</property>
+                <property name="margin-end">5</property>
+                <property name="margin-start">5</property>
+                <property name="margin-top">5</property>
+                <child>
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">10</property>
+                    <property name="margin-bottom">10</property>
+                    <property name="margin-top">10</property>
+                    <property name="margin-start">10</property>
+                    <property name="margin-end">10</property>
+                    <child>
+                      <object class="GtkLabel" id="download-emdb-map-label">
+                        <property name="label">Downloading...</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkProgressBar" id="download-emdb-map-progressbar">
+                        <property name="show-text">True</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="download-emdb-map-cancel-button">
+                        <property name="label">Cancel</property>
+                        <property name="halign">center</property>
                       </object>
                     </child>
                   </object>
@@ -16942,6 +16983,25 @@ Then use &quot;Run Refmac...&quot; from the &quot;Model/Fit/Refine&quot; dialog.
                             </child>
                           </object>
                         </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkFrame" id="frame_symmetry_as_calphas">
+                    <property name="margin-start">6</property>
+                    <property name="margin-end">6</property>
+                    <property name="margin-top">4</property>
+                    <property name="margin-bottom">4</property>
+                    <child>
+                      <object class="GtkCheckButton" id="symmetry_as_calphas_checkbutton">
+                        <property name="label" translatable="yes"> Symmetry as C-Alphas</property>
+                        <property name="can-focus">1</property>
+                        <property name="margin-top">6</property>
+                        <property name="margin-bottom">6</property>
+                        <property name="margin-start">6</property>
+                        <property name="margin-end">6</property>
+                        <signal name="toggled" handler="on_symmetry_as_calphas_checkbutton_toggled" swapped="no"/>
                       </object>
                     </child>
                   </object>

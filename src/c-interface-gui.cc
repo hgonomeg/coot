@@ -2251,6 +2251,7 @@ void handle_get_accession_code(GtkWidget *frame, GtkWidget *entry) {
    };
 
    const gchar *text_c = gtk_editable_get_text(GTK_EDITABLE(entry));
+   bool do_message = true;
 
    if (! text_c) {
       std::cout << "WARNING:: handle_get_accession_code no text " << std::endl;
@@ -2263,6 +2264,7 @@ void handle_get_accession_code(GtkWidget *frame, GtkWidget *entry) {
       std::cout << "DEBUG:: extracted accession code handle mode n " << n << std::endl;
       if (n == COOT_EMDB_CODE) {
          fetch_emdb_map(text);
+         do_message = false;
       } else {
          if (n == COOT_COD_CODE) {
 #ifdef USE_LIBCURL
@@ -2273,7 +2275,8 @@ void handle_get_accession_code(GtkWidget *frame, GtkWidget *entry) {
          }
       }
    }
-   graphics_info_t::ephemeral_overlay_label("Press U to return to previous centre");
+   if (do_message)
+      graphics_info_t::ephemeral_overlay_label("Press U to return to previous centre");
    // and hide the accession code window
    gtk_widget_set_visible(frame, FALSE);
 }
@@ -2291,6 +2294,58 @@ void do_torsions_toggle(GtkWidget *checkbutton) {
       g.do_torsion_restraints = 0;
 }
 
+// Set the active item of a GtkComboBoxText to the entry whose parsed
+// numerical value matches `value`. If no entry matches, insert a new
+// item formatted from `value` at the position that keeps the list
+// in ascending numerical order, and select it.
+static void
+sync_refine_params_combobox_to_value(GtkComboBox *combo, double value) {
+
+   if (!combo) return;
+   GtkTreeModel *model = gtk_combo_box_get_model(combo);
+   if (!model) return;
+
+   const double eps_rel = 1.0e-4;
+   int n = gtk_tree_model_iter_n_children(model, nullptr);
+   int insert_pos = n;             // append by default
+   int match_idx  = -1;
+
+   for (int i = 0; i < n; i++) {
+      GtkTreeIter iter;
+      if (!gtk_tree_model_iter_nth_child(model, &iter, nullptr, i)) break;
+      gchar *text = nullptr;
+      gtk_tree_model_get(model, &iter, 0, &text, -1);
+      if (!text) continue;
+      double item_val = 0.0;
+      try { item_val = coot::util::string_to_float(text); }
+      catch (const std::runtime_error &) { g_free(text); continue; }
+      g_free(text);
+
+      double tol = std::max(eps_rel, eps_rel * std::fabs(value));
+      if (std::fabs(item_val - value) <= tol) {
+         match_idx = i;
+         break;
+      }
+      if (item_val > value && insert_pos == n) {
+         insert_pos = i; // first item greater than value -> insert here
+      }
+   }
+
+   if (match_idx < 0) {
+      // pick a sensible number of decimal places: enough to round-trip
+      // the value without dropping significant digits.
+      int n_dp = 2;
+      double av = std::fabs(value);
+      if (av > 0.0 && av < 0.1)   n_dp = 4;
+      else if (av < 1.0)          n_dp = 3;
+      std::string txt = coot::util::float_to_string_using_dec_pl(value, n_dp);
+      gtk_combo_box_text_insert_text(GTK_COMBO_BOX_TEXT(combo), insert_pos, txt.c_str());
+      match_idx = insert_pos;
+   }
+
+   gtk_combo_box_set_active(combo, match_idx);
+}
+
 void set_refine_params_comboboxes() {
 
    graphics_info_t g;
@@ -2298,13 +2353,20 @@ void set_refine_params_comboboxes() {
    GtkWidget *cb2 = widget_from_builder("refine_params_rama_restraints_combobox");
    GtkWidget *cb3 = widget_from_builder("refine_params_lennard_jones_epsilon_combobox");
    GtkWidget *cb4 = widget_from_builder("refine_params_torsion_weight_combobox");
-   GtkWidget *cb5 = widget_from_builder("refine_params_overall_weight_combobox");
    GtkWidget *tb  = widget_from_builder("refine_params_more_control_togglebutton");
 
-   if (cb1) gtk_combo_box_set_active(GTK_COMBO_BOX(cb1), g.refine_params_dialog_geman_mcclure_alpha_combobox_position);
-   if (cb2) gtk_combo_box_set_active(GTK_COMBO_BOX(cb2), g.refine_params_dialog_rama_restraints_weight_combobox_position);
-   if (cb3) gtk_combo_box_set_active(GTK_COMBO_BOX(cb3), g.refine_params_dialog_lennard_jones_epsilon_combobox_position);
-   if (cb4) gtk_combo_box_set_active(GTK_COMBO_BOX(cb4), g.refine_params_dialog_torsions_weight_combox_position);
+   if (cb1) sync_refine_params_combobox_to_value(GTK_COMBO_BOX(cb1), g.geman_mcclure_alpha);
+   if (cb2) sync_refine_params_combobox_to_value(GTK_COMBO_BOX(cb2), g.rama_plot_restraints_weight);
+   if (cb3) sync_refine_params_combobox_to_value(GTK_COMBO_BOX(cb3), g.lennard_jones_epsilon);
+   if (cb4) sync_refine_params_combobox_to_value(GTK_COMBO_BOX(cb4), g.torsion_restraints_weight);
+
+   // Keep the cached combobox positions in sync with the active index so the
+   // change-callbacks (which write these as `idx`) and any external callers
+   // see consistent state.
+   if (cb1) g.refine_params_dialog_geman_mcclure_alpha_combobox_position  = gtk_combo_box_get_active(GTK_COMBO_BOX(cb1));
+   if (cb2) g.refine_params_dialog_rama_restraints_weight_combobox_position = gtk_combo_box_get_active(GTK_COMBO_BOX(cb2));
+   if (cb3) g.refine_params_dialog_lennard_jones_epsilon_combobox_position = gtk_combo_box_get_active(GTK_COMBO_BOX(cb3));
+   if (cb4) g.refine_params_dialog_torsions_weight_combox_position        = gtk_combo_box_get_active(GTK_COMBO_BOX(cb4));
 
 
    if (tb) {
@@ -2474,7 +2536,6 @@ void toggle_environment_show_distances(GtkCheckButton *button) {
    graphics_info_t g;
 
    GtkWidget *hbox                    = widget_from_builder("environment_distance_distances_frame");
-   GtkWidget *distance_type_frame     = widget_from_builder("environment_distances_type_selection");
    GtkWidget *label_atom_check_button = widget_from_builder("environment_distance_label_atom_checkbutton");
 
    if (gtk_check_button_get_active(button)) {
@@ -2482,7 +2543,6 @@ void toggle_environment_show_distances(GtkCheckButton *button) {
       g.environment_show_distances = 1;
       gtk_widget_set_sensitive(hbox, TRUE);
       gtk_widget_set_sensitive(label_atom_check_button, TRUE);
-      gtk_widget_set_sensitive(distance_type_frame, TRUE);
 
       std::pair<int, int> r = g.get_closest_atom();
       if (r.first >= 0) {
@@ -2492,10 +2552,8 @@ void toggle_environment_show_distances(GtkCheckButton *button) {
       }
 
    } else {
-      // std::cout << "toggled evironment distances off" << std::endl;
       g.environment_show_distances = 0;
       gtk_widget_set_sensitive(hbox, FALSE);
-      gtk_widget_set_sensitive(distance_type_frame, FALSE);
       graphics_draw();
       // gtk_widget_set_sensitive(label_atom_check_button, FALSE); // keep it always active
    }
@@ -3291,6 +3349,7 @@ void close_molecule(int imol) {
 
    if (is_valid_model_molecule(imol) || is_valid_map_molecule(imol)) {
       g.delete_pointers_to_map_in_other_molecules(imol);
+      graphics_info_t::rama_plot_boxes_handle_close_molecule(imol);
       g.molecules[imol].close_yourself();
       // and close the graphics ligand view if it was a residue of this molecule
       g.close_graphics_ligand_view_for_mol(imol);
@@ -3308,6 +3367,9 @@ void close_molecule(int imol) {
 
    g.clear_up_moving_atoms_maybe(imol);
    g.update_scroll_wheel_map_on_molecule_close();
+
+   graphics_info_t::refresh_ramachandran_plot_model_list();
+   graphics_info_t::refresh_validation_graph_model_list();
 
    graphics_draw();
    std::string cmd = "close-molecule";
@@ -3497,6 +3559,22 @@ GtkWidget *wrapped_create_show_symmetry_window() {
     if (graphics_info_t::symmetry_atom_labels_expanded_flag)
        gtk_check_button_set_active(GTK_CHECK_BUTTON(checkbutton), TRUE);
 
+    //  The Symmetry as C-Alphas checkbutton - reflects state of first model molecule
+    GtkWidget *sym_ca_checkbutton = widget_from_builder("symmetry_as_calphas_checkbutton");
+    if (sym_ca_checkbutton) {
+       short int ca_state = 0;
+       int n_mol = graphics_n_molecules();
+       for (int ii=0; ii<n_mol; ii++) {
+          if (is_valid_model_molecule(ii)) {
+             if (graphics_info_t::molecules[ii].symmetry_as_calphas) {
+                ca_state = 1;
+                break;
+             }
+          }
+       }
+       gtk_check_button_set_active(GTK_CHECK_BUTTON(sym_ca_checkbutton), ca_state);
+    }
+
 #if 0
     // GtkWidget *colour_button = lookup_widget(show_symm_window, "symmetry_colorbutton");
     GtkWidget *colour_button = widget_from_builder("symmetry_colorbutton"); // a GtkButton
@@ -3676,6 +3754,21 @@ void set_map_hexcolour(int imol, const char *hex_colour) {
    coot::colour_holder ch(hex_colour);
    set_map_colour(imol, ch.red, ch.green, ch.blue);
 
+}
+
+void brighten_maps() {
+
+   graphics_info_t g;
+   auto map_list = g.get_map_molecule_vector();
+   for (unsigned int i=0; i<map_list.size(); i++) {
+      const auto &imol = map_list[i];
+      float rc = graphics_info_t::molecules[imol].map_colour.red;
+      float gc = graphics_info_t::molecules[imol].map_colour.green;
+      float bc = graphics_info_t::molecules[imol].map_colour.blue;
+      float fac = 1.25;
+      set_map_colour(imol, rc * fac, gc * fac, bc * fac);
+   }
+   g.graphics_draw();
 }
 
 

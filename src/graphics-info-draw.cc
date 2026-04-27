@@ -868,9 +868,8 @@ graphics_info_t::draw_map_molecules(stereo_eye_t eye, bool draw_transparent_maps
       err = glGetError();
       if (err) std::cout << "gtk3_draw_map_molecules() glLineWidth " << err << std::endl;
 
-
       Shader &shader = shader_for_meshes;
-      shader.Use(); // needed? I think not.
+      // shader.Use(); // needed? I think not.
 
       glm::mat4 mvp = get_molecule_mvp(eye);
       glm::mat4 model_rotation = get_model_rotation();
@@ -2322,6 +2321,7 @@ graphics_info_t::draw_meshed_generic_display_object_meshes(stereo_eye_t eye, uns
          glm::vec4 bg_col(background_colour, 1.0);
          bool wireframe_mode = false;
          float opacity = 0.5;
+         bool do_depth_fog = true;
          auto ccrc = RotationCentre();
          glm::vec3 rc(ccrc.x(), ccrc.y(), ccrc.z());
          for (unsigned int i=0; i<generic_display_objects.size(); i++) {
@@ -2329,7 +2329,7 @@ graphics_info_t::draw_meshed_generic_display_object_meshes(stereo_eye_t eye, uns
                std::cout << "drawing i " << i << std::endl;
             generic_display_objects[i].mesh.draw(&shader_for_moleculestotriangles,
                                                  eye, mvp, model_rotation, lights, eye_position, rc, opacity,
-                                                 bg_col, wireframe_mode, false, show_just_shadows);
+                                                 bg_col, wireframe_mode, do_depth_fog, show_just_shadows);
          }
       }
    }
@@ -2392,7 +2392,7 @@ graphics_info_t::draw_meshed_generic_display_object_meshes(stereo_eye_t eye, uns
          glm::vec3 rc(ccrc.x(), ccrc.y(), ccrc.z());
          glm::vec3 eye_position;
          float opacity = 1.0;
-         bool do_depth_fog = false;
+         bool do_depth_fog = true;
          int light_index =  0;
          glm::mat4 light_view_mvp = get_light_space_mvp(light_index);
          bool show_just_shadows = false;
